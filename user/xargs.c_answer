@@ -1,0 +1,33 @@
+#include "kernel/types.h"
+#include "kernel/param.h"
+#include "user/user.h"
+
+int main(int argc, char *argv[]){
+    char* argvs[MAXARG];
+    for(int i=1;i<argc;i++){
+        argvs[i-1]=argv[i];
+    }
+    char buf[512];
+    int index;
+    int read_len;
+    while(1){
+        index = -1;
+        do{
+            index++;
+            read_len=read(0,&buf[index],sizeof(char));
+        }while(read_len>0&&buf[index]!='\n');
+        if(read_len==0&&index==0){
+            break;
+        }
+        buf[index]='\0';
+        argvs[argc-1]=buf;
+         if (fork() == 0) {
+            exec(argvs[0], argvs);
+            exit(0);
+        } else {
+            wait(0);
+        }
+
+    }
+    exit(0);
+}

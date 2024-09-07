@@ -1,0 +1,78 @@
+#include "kernel/types.h"
+#include "kernel/stat.h"
+#include "user/user.h"
+#include "kernel/param.h"
+
+char* createNewArg(char* newArg, char* str1, char* str2){ 
+	if(strlen(str1) + strlen(str2) > MAXARG - 2){
+		printf("commend too long\n");
+		exit(0);
+	}
+	strcpy(newArg, str1); // copy str1 to newarg
+	char* p = newArg;
+	p += strlen(str1); // p point to '\0' of newarg
+	*p++ = ' ';  // replace '\0' with ' '
+	memcpy(p, str2, strlen(str2)+1); // add str2 after newarg
+	return newArg;
+}
+
+void execute_commend(char* argv1, char* argv2){
+	printf("argv1 : %s, argv2: %s\n", argv1, argv2);
+	/*
+	if(fork() == 0){
+		char* argv[2];
+		strcpy(argv[0], argv1);
+		strcpy(argv[1], argv2);
+		exec(argv1, argv);	
+	}
+	else{
+		if(wait(0) == 0)
+			exit(0);
+	}
+	*/
+}
+
+int main(int argc , char* argv[]){
+	if(argc < 3){
+		printf("Usage: xargs args");
+		exit(1);
+	}
+	char buf[MAXARG]; // store the commend read from std input
+	char ch;
+	int index = 0;
+	char newargv2[MAXARG];
+	while(read(0, &ch, sizeof(char)) > 0){
+		printf("%c\n", ch);
+		if(ch == '\n'){
+			//read(0, &ch, sizeof(char));
+			buf[index] = '\0';
+			// create new arg
+			if(strlen(argv[2]) + strlen(buf) > MAXARG - 1){
+				printf("commend too long\n");
+				exit(0);
+			}	
+			strcpy(newargv2, argv[2]); // copy argv[2] to newargv2
+			char* p = newargv2;
+			p += strlen(argv[2]); // p point to '\0' of newargv2
+			*p++ = ' ';  // replace '\0' with ' '
+			memcpy(p, buf, strlen(buf)+1); // add buf to the end of newargv2
+			//createNewArg(newargv2, argv[2], buf);
+
+			// execute new commend
+			execute_commend(argv[1], newargv2);
+			
+			// reset
+			index = 0;
+			memset(buf, 0, MAXARG);
+			memset(newargv2, 0, MAXARG); 
+		}
+		else{
+			if(index < MAXARG - 1)
+				buf[index++] = ch;
+			else
+				exit(1);
+		}
+	}
+	return 0;
+}
+
