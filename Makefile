@@ -177,6 +177,7 @@ mkfs/mkfs: mkfs/mkfs.c $K/fs.h $K/param.h
 .PRECIOUS: %.o
 
 UPROGS=\
+	$U/_test\
 	$U/_cat\
 	$U/_echo\
 	$U/_forktest\
@@ -197,7 +198,7 @@ UPROGS=\
 	$U/_pingpong\
 	$U/_primes\
 	$U/_find\
-
+	$U/_xargs\
 
 ifeq ($(LAB),$(filter $(LAB), pgtbl lock))
 UPROGS += \
