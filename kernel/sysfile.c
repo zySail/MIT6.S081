@@ -108,12 +108,13 @@ uint64
 sys_fstat(void)
 {
   struct file *f;
-  uint64 st; // user pointer to struct stat
+  uint64 st; 
 
-  if(argfd(0, 0, &f) < 0 || argaddr(1, &st) < 0)
+  if(argfd(0, 0, &f) < 0 || argaddr(1, &st) < 0) // get fd and struct st's adress
     return -1;
-  return filestat(f, st);
+  return filestat(f, st); // in file.c // Get metadata about file f, store in st
 }
+//user/user.h:int fstat(int fd, struct stat*);
 
 // Create the path new as a link to the same inode as old.
 uint64

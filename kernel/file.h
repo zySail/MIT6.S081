@@ -4,7 +4,7 @@ struct file {
   char readable;
   char writable;
   struct pipe *pipe; // FD_PIPE
-  struct inode *ip;  // FD_INODE and FD_DEVICE
+  struct inode *ip;  // FD_INODE and FD_DEVICE // a pointer to inode
   uint off;          // FD_INODE
   short major;       // FD_DEVICE
 };

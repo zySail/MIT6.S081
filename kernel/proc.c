@@ -314,6 +314,9 @@ fork(void)
   acquire(&np->lock);
   np->state = RUNNABLE;
   release(&np->lock);
+	
+	// copy mask from parent to child
+	np->mask = p->mask;
 
   return pid;
 }
@@ -653,4 +656,17 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+// count the number of proc's state is not UNUSED 
+uint64 count_proc_not_UNUSED(void){
+  uint64 count = 0;
+  struct proc *p;
+  
+  for(p = proc; p < &proc[NPROC]; p++){
+    if(p->state != UNUSED)
+      count++;
+  }
+
+  return count;
 }

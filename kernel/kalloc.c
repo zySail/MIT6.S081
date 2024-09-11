@@ -18,20 +18,20 @@ struct run {
   struct run *next;
 };
 
-struct {
-  struct spinlock lock;
+struct { 
+  struct spinlock lock; // protect free list
   struct run *freelist;
 } kmem;
 
 void
-kinit()
+kinit() // init allocator
 {
   initlock(&kmem.lock, "kmem");
   freerange(end, (void*)PHYSTOP);
 }
 
 void
-freerange(void *pa_start, void *pa_end)
+freerange(void *pa_start, void *pa_end) // add free memory to free list
 {
   char *p;
   p = (char*)PGROUNDUP((uint64)pa_start);
@@ -57,7 +57,7 @@ kfree(void *pa)
   r = (struct run*)pa;
 
   acquire(&kmem.lock);
-  r->next = kmem.freelist;
+  r->next = kmem.freelist; // 头插法
   kmem.freelist = r;
   release(&kmem.lock);
 }
@@ -79,4 +79,15 @@ kalloc(void)
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
+}
+
+uint64 count_free_memory(void){
+  uint64 count = 0;
+  struct run *r;
+  r = kmem.freelist;
+  while(!r){
+    count++;
+    r = r->next;
+  }
+  return count * PGSIZE;
 }

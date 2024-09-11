@@ -350,7 +350,7 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
-    pa0 = walkaddr(pagetable, va0);
+    pa0 = walkaddr(pagetable, va0); // get dstva's physical adress
     if(pa0 == 0)
       return -1;
     n = PGSIZE - (dstva - va0);

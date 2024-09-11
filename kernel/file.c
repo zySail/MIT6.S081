@@ -92,9 +92,9 @@ filestat(struct file *f, uint64 addr)
   
   if(f->type == FD_INODE || f->type == FD_DEVICE){
     ilock(f->ip);
-    stati(f->ip, &st);
+    stati(f->ip, &st); // get st from the inode pointed to by ip
     iunlock(f->ip);
-    if(copyout(p->pagetable, addr, (char *)&st, sizeof(st)) < 0)
+    if(copyout(p->pagetable, addr, (char *)&st, sizeof(st)) < 0) // copy st to addr
       return -1;
     return 0;
   }
