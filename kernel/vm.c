@@ -432,3 +432,25 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     return -1;
   }
 }
+
+
+static char* depth[3] = {".. .. ..", ".. ..", ".. "};
+
+void deepSearch(pagetable_t pagetable, int level){
+  for(int i = 0; i < 512; i++){
+    pte_t pte = pagetable[i];
+    if(pte & PTE_V) {
+      printf("%s%d: pte %p pa %p\n", depth[level], i, pte, (pte_t)PTE2PA(pte));
+      if(level > 0) // pte & (PTE_R|PTE_W|PTE_X) == 0
+        deepSearch((pagetable_t)PTE2PA(pte), level-1); // search deeper level page table
+    }
+  }
+  return;
+}
+
+void vmprint(pagetable_t pagetable){
+  printf("page table %p\n", *pagetable);
+  deepSearch(pagetable, 2);
+  return;
+}
+
