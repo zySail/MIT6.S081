@@ -1,0 +1,15 @@
+1. Which other xv6 system call(s) could be made faster using this shared page? Explain how.
+
+	this shared page is only one page in size, and only read for usersapce
+
+	if a syacall needs to get some kernel-sensitive data, and the data is fixed and small, kernel can write data in advance to this shared page, user just need to read from the shard page
+	
+
+
+2. Explain the output of vmprint in terms of Fig 3-4 from the text. 
+	(1) What does page 0 contain? 
+	(2) What is in page 2? 
+	(3) When running in user mode, could the process read/write the memory mapped by page 1? 
+	(4) What does the third to last page contain?
+
+
