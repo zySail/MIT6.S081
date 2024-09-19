@@ -76,6 +76,15 @@ usertrap(void)
   if(p->killed)
     exit(-1);
 
+  if(which_dev == 2 && p->ticks != 0){
+    p->passedticks++;
+    if(p->passedticks >= p->ticks){
+      // execuate hander
+      p->trapframe->epc = p->hander;
+      p->passedticks = 0;
+    }
+  }
+
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2)
     yield();
