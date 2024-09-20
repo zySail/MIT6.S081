@@ -99,7 +99,7 @@ sys_uptime(void)
 
 
 uint64
-sys_sigalarm(void){
+sys_sigalarm(void){ // get arguments and set alarm
   int ticks;
   uint64 hander;
   if(argint(0, &ticks) < 0) return -1;
@@ -113,5 +113,13 @@ sys_sigalarm(void){
 
 uint64
 sys_sigreturn(void){
+  struct proc *p = myproc();
+  // restore registers
+  memmove(p->trapframe, p->savedtrapframe, sizeof(struct trapframe));
+  // reset
+  p->is_handering = 0;
+  p->passedticks = 0;
+  // back
+  usertrapret();
   return 0;
 }

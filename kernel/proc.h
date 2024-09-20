@@ -109,4 +109,6 @@ struct proc {
   int ticks;
   uint64 hander;
   int passedticks;
+  int is_handering;
+  struct trapframe *savedtrapframe;
 };

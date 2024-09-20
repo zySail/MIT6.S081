@@ -145,6 +145,12 @@ found:
   p->ticks = 0;
   p->passedticks = 0;
   p->hander = 0;
+  p->is_handering = 0;
+  if((p->savedtrapframe = (struct trapframe *)kalloc()) == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
 
   return p;
 }

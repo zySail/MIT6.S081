@@ -76,18 +76,22 @@ usertrap(void)
   if(p->killed)
     exit(-1);
 
-  if(which_dev == 2 && p->ticks != 0){
-    p->passedticks++;
-    if(p->passedticks >= p->ticks){
-      // execuate hander
-      p->trapframe->epc = p->hander;
-      p->passedticks = 0;
+  if(which_dev == 2){
+    if(p->ticks != 0 && p->is_handering == 0){
+      p->passedticks++;
+      if(p->passedticks >= p->ticks){
+        // store trapframe
+        memmove(p->savedtrapframe, p->trapframe, sizeof(struct trapframe));
+        // execuate hander
+        p->is_handering = 1;
+        p->trapframe->epc = p->hander;
+      }
+    }
+    else{
+      // give up the CPU if this is a timer interrupt.
+      yield();
     }
   }
-
-  // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
-    yield();
 
   usertrapret();
 }
