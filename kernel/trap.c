@@ -77,11 +77,11 @@ usertrap(void)
     exit(-1);
 
   if(which_dev == 2){
-    if(p->ticks != 0 && p->is_handering == 0){
+    if(p->ticks > 0 && p->is_handering == 0){ // alarm enabled and no hander runing
       p->passedticks++;
       if(p->passedticks >= p->ticks){
         // store trapframe
-        memmove(p->savedtrapframe, p->trapframe, sizeof(struct trapframe));
+        memmove(p->savedtrapframe, p->trapframe, PGSIZE);
         // execuate hander
         p->is_handering = 1;
         p->trapframe->epc = p->hander;
