@@ -319,7 +319,8 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     // it is also ok to set before, but need to restore when map failed
     *pte |= PTE_COW;
     *pte &= ~PTE_W; 
-    incrementref(pa); // ref++
+    if(incrementref(pa) < 0) // ref++
+      panic("increment ref failed");
   }
   return 0;
 

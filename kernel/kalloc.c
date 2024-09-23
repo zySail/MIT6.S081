@@ -26,24 +26,6 @@ struct {
 int ref[32768] = {0}; // reference count array
 #define INDEX(p) ((p-KERNBASE)/4096)
 
-int initref(uint64 pa){
-  if(pa > KERNBASE && pa < PHYSTOP){
-    ref[INDEX(pa)] = 1;
-  }
-  else{
-    return -1;
-  }
-  return 0;
-}
-
-int getref(uint64 pa){
-  if(pa > KERNBASE && pa < PHYSTOP){
-    return ref[INDEX(pa)];
-  }
-  else{
-    return -1;
-  }
-}
 
 int incrementref(uint64 pa){
   if(pa > KERNBASE && pa < PHYSTOP){
@@ -51,6 +33,7 @@ int incrementref(uint64 pa){
       acquire(&kmem.lock);
       ref[INDEX(pa)]++;
       release(&kmem.lock);
+      return 0;
     }
     else 
       return -1;
@@ -58,23 +41,6 @@ int incrementref(uint64 pa){
   else{
     return -1;
   }
-  return 0;
-}
-
-int decrementref(uint64 pa){
-  if(pa > KERNBASE && pa < PHYSTOP){
-    if(ref[INDEX(pa)] > 0){
-      acquire(&kmem.lock);
-      ref[INDEX(pa)]--;
-      release(&kmem.lock);
-    }
-    else  
-      return -1;
-  }
-  else{
-    return 0;
-  }
-  return 0;
 }
 
 void
@@ -107,15 +73,18 @@ kfree(void *pa)
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
 
-  if(getref((uint64)pa) < 0)
+  // check ref, ref--. then if ref == 0, go down dofree
+  acquire(&kmem.lock);
+  uint64 index = INDEX((uint64)pa);
+  if(ref[index] < 1)
     panic("kfree panic");
-
-  if(getref((uint64)pa) > 1){
-    decrementref((uint64)pa);
+  ref[index]--;
+  if(ref[index] > 0){
+    release(&kmem.lock);
     return;
   }
+  release(&kmem.lock);
 
-  decrementref((uint64)pa);
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
 
@@ -137,14 +106,17 @@ kalloc(void)
 
   acquire(&kmem.lock);
   r = kmem.freelist;
-  if(r)
+  if(r){
     kmem.freelist = r->next;
+    uint64 index = INDEX((uint64)r);
+    if(ref[index] != 0) 
+      panic("kalloc panic");
+    ref[index] = 1;
+  }
   release(&kmem.lock);
 
   if(r){
     memset((char*)r, 5, PGSIZE); // fill with junk
-    if(getref((uint64)r) != 0) panic("kalloc");
-    initref((uint64)r);
   }
   return (void*)r;
 }
