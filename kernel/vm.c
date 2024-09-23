@@ -15,54 +15,6 @@ extern char etext[];  // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
 
-int ref[32768] = {0}; // reference count array
-#define INDEX(p) ((p-KERNBASE)/4096)
-
-int initref(uint64 pa){
-  if(pa > KERNBASE && pa < PHYSTOP){
-    ref[INDEX(pa)] = 1;
-  }
-  else{
-    return -1;
-  }
-  return 0;
-}
-
-int getref(uint64 pa){
-  if(pa > KERNBASE && pa < PHYSTOP){
-    return ref[INDEX(pa)];
-  }
-  else{
-    return -1;
-  }
-}
-
-int incrementref(uint64 pa){
-  if(pa > KERNBASE && pa < PHYSTOP){
-    if(ref[INDEX(pa)] < 65535) // max ref count by myself
-      ref[INDEX(pa)]++;
-    else 
-      return -1;
-  }
-  else{
-    return -1;
-  }
-  return 0;
-}
-
-int decrementref(uint64 pa){
-  if(pa > KERNBASE && pa < PHYSTOP){
-    if(ref[INDEX(pa)] > 0)
-      ref[INDEX(pa)]--;
-    else  
-      return -1;
-  }
-  else{
-    return 0;
-  }
-  return 0;
-}
-
 // Make a direct-map page table for the kernel.
 pagetable_t
 kvmmake(void)
@@ -353,17 +305,21 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
 
-    // set pte's flags
-    *pte |= PTE_COW; // is a COW page
-    *pte &= ~PTE_W; // unwritable
+    // set flags
+    flags = PTE_FLAGS(*pte);
+    flags |= PTE_COW; // is a COW page
+    flags &= ~PTE_W; // unwritable
 
     // map
     pa = PTE2PA(*pte);
-    flags = PTE_FLAGS(*pte);
     if(mappages(new, i, PGSIZE, pa, flags) != 0){ // map in the same pa
       goto err;
     }
     printf("COW: pa(%p)\n", pa);
+    // if map success set father proc's flags
+    // it is also ok to set before, but need to restore when map failed
+    *pte |= PTE_COW;
+    *pte &= ~PTE_W; 
     incrementref(pa); // ref++
   }
   return 0;
@@ -380,13 +336,13 @@ int handle_store_pagefault(pagetable_t pagetable, uint64 va){
 
   if((va % PGSIZE) != 0)
     panic("uvmunmap: not aligned");
-  if(va < 0 || va > MAXVA)
-    panic("wrong va");
-  if((pte = walk(pagetable, va, 0)) == 0)
+  if((pte = walk(pagetable, va, 0)) == 0) // walk will check va
       panic("uvmcopy: pte should exist");
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
-  //if((*pte & PTE_COW))
+    if((*pte & PTE_U) == 0)
+      panic("uvmcopy: not a user page");
+  
   pa = PTE2PA(*pte);
   printf("old map: va(%p) to pa(%p)\n", va, pa);
   printf("old map's PTE_W is %d, PTE_COW is %d\n", !!(*pte&PTE_W), !!(*pte&PTE_COW));
@@ -396,7 +352,7 @@ int handle_store_pagefault(pagetable_t pagetable, uint64 va){
     printf("no mem for a new page\n");
     return -1;
   }
-  memmove((void*)newpa, (const void*)pa, PGSIZE);
+  memmove((void*)newpa, (void*)pa, PGSIZE);
 
   //set PTE_W, clear PTE_COW, save flags
   uint flags = PTE_FLAGS(*pte);
@@ -405,7 +361,7 @@ int handle_store_pagefault(pagetable_t pagetable, uint64 va){
 
   // unmap(va,pa)
   uvmunmap(pagetable, va, 1, 0);
-  decrementref(pa);
+  kfree((void*)pa); // in kfree ref--
   
   // map(va,newpa)
   if(mappages(pagetable, va, PGSIZE, (uint64)newpa, flags) < 0) return -1;
