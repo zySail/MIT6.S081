@@ -65,8 +65,7 @@ usertrap(void)
     intr_on();
 
     syscall();
-  } 
-  else if(r_scause() == 15){
+  } else if(r_scause() == 15){
     // store/AMO page fault
     if(p->killed)
       exit(-1);
@@ -74,8 +73,7 @@ usertrap(void)
     uint64 fault_va = r_stval();
     if(handle_store_pagefault(p->pagetable, PGROUNDDOWN(fault_va)) < 0)
       p->killed = 1;
-  }
-  else if((which_dev = devintr()) != 0){
+  } else if((which_dev = devintr()) != 0){
     // ok
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);

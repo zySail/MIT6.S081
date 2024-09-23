@@ -357,13 +357,10 @@ int handle_store_pagefault(pagetable_t pagetable, uint64 va){
   flags |= PTE_W;
   flags &= ~PTE_COW;
 
-  // unmap(va,pa)
-  uvmunmap(pagetable, va, 1, 0);
-  kfree((void*)pa); // kfree will ref-- or free the pa when there is only one ref
+  *pte = PA2PTE(newpa) | flags; // modify pte directly
   
-  // map(va,newpa)
-  if(mappages(pagetable, va, PGSIZE, (uint64)newpa, flags) < 0) return -1;
-  
+  kfree((void*)pa); // kfree will ref-- then free the pa when ref == 0
+
   return 0;
 }
 
