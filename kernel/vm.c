@@ -315,7 +315,6 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     if(mappages(new, i, PGSIZE, pa, flags) != 0){ // map in the same pa
       goto err;
     }
-    printf("COW: pa(%p)\n", pa);
     // if map success set father proc's flags
     // it is also ok to set before, but need to restore when map failed
     *pte |= PTE_COW;
@@ -344,8 +343,6 @@ int handle_store_pagefault(pagetable_t pagetable, uint64 va){
       panic("uvmcopy: not a user page");
   
   pa = PTE2PA(*pte);
-  printf("old map: va(%p) to pa(%p)\n", va, pa);
-  printf("old map's PTE_W is %d, PTE_COW is %d\n", !!(*pte&PTE_W), !!(*pte&PTE_COW));
 
   // alloc new page and copy
   if((newpa = (uint64)kalloc()) == 0){
@@ -361,13 +358,10 @@ int handle_store_pagefault(pagetable_t pagetable, uint64 va){
 
   // unmap(va,pa)
   uvmunmap(pagetable, va, 1, 0);
-  kfree((void*)pa); // in kfree ref--
+  kfree((void*)pa); // kfree will ref-- or free the pa when there is only one ref
   
   // map(va,newpa)
   if(mappages(pagetable, va, PGSIZE, (uint64)newpa, flags) < 0) return -1;
-  printf("new map: va(%p) to pa(%p)\n", va, newpa);
-  printf("new map's PTE_W is %d, PTE_COW is %d\n", !!(*pte&PTE_W), !!(*pte&PTE_COW));
-  printf("\n");
   
   return 0;
 }
