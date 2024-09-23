@@ -384,12 +384,20 @@ int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
+  pte_t *pte;
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
+    
+    pte = walk(pagetable,va0, 0);
+    if((*pte & PTE_W ) == 0) // dst is unwritable
+      if(handle_store_pagefault(pagetable, va0) < 0)
+        return -1;
+
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0)
       return -1;
+
     n = PGSIZE - (dstva - va0);
     if(n > len)
       n = len;
