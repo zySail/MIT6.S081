@@ -15,6 +15,54 @@ extern char etext[];  // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
 
+int ref[32768] = {0}; // reference count array
+#define INDEX(p) ((p-KERNBASE)/4096)
+
+int initref(uint64 pa){
+  if(pa > KERNBASE && pa < PHYSTOP){
+    ref[INDEX(pa)] = 1;
+  }
+  else{
+    return -1;
+  }
+  return 0;
+}
+
+int getref(uint64 pa){
+  if(pa > KERNBASE && pa < PHYSTOP){
+    return ref[INDEX(pa)];
+  }
+  else{
+    return -1;
+  }
+}
+
+int incrementref(uint64 pa){
+  if(pa > KERNBASE && pa < PHYSTOP){
+    if(ref[INDEX(pa)] < 65535) // max ref count by myself
+      ref[INDEX(pa)]++;
+    else 
+      return -1;
+  }
+  else{
+    return -1;
+  }
+  return 0;
+}
+
+int decrementref(uint64 pa){
+  if(pa > KERNBASE && pa < PHYSTOP){
+    if(ref[INDEX(pa)] > 0)
+      ref[INDEX(pa)]--;
+    else  
+      return -1;
+  }
+  else{
+    return 0;
+  }
+  return 0;
+}
+
 // Make a direct-map page table for the kernel.
 pagetable_t
 kvmmake(void)
@@ -316,7 +364,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       goto err;
     }
     printf("COW: pa(%p)\n", pa);
-    //incrementref(pa); // ref++
+    incrementref(pa); // ref++
   }
   return 0;
 
@@ -357,7 +405,7 @@ int handle_store_pagefault(pagetable_t pagetable, uint64 va){
 
   // unmap(va,pa)
   uvmunmap(pagetable, va, 1, 0);
-  //decrementref(pa);
+  decrementref(pa);
   
   // map(va,newpa)
   if(mappages(pagetable, va, PGSIZE, (uint64)newpa, flags) < 0) return -1;
