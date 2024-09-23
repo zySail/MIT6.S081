@@ -325,6 +325,49 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   return -1;
 }
 
+int handle_store_pagefault(pagetable_t pagetable, uint64 va){
+  uint64 pa;
+  uint64 newpa;
+  pte_t *pte;
+
+  if((va % PGSIZE) != 0)
+    panic("uvmunmap: not aligned");
+  if(va < 0 || va > MAXVA)
+    panic("wrong va");
+  if((pte = walk(pagetable, va, 0)) == 0)
+      panic("uvmcopy: pte should exist");
+    if((*pte & PTE_V) == 0)
+      panic("uvmcopy: page not present");
+  //if((*pte & PTE_COW))
+  pa = PTE2PA(*pte);
+  printf("old map: va(%p) to pa(%p)\n", va, pa);
+  printf("old map's PTE_W is %d, PTE_COW is %d\n", !!(*pte&PTE_W), !!(*pte&PTE_COW));
+
+  // alloc new page and copy
+  if((newpa = (uint64)kalloc()) == 0){
+    printf("no mem for a new page\n");
+    return -1;
+  }
+  memmove((void*)newpa, (const void*)pa, PGSIZE);
+
+  //set PTE_W, clear PTE_COW, save flags
+  uint flags = PTE_FLAGS(*pte);
+  flags |= PTE_W;
+  flags &= ~PTE_COW;
+
+  // unmap(va,pa)
+  uvmunmap(pagetable, va, 1, 0);
+  //decrementref(pa);
+  
+  // map(va,newpa)
+  if(mappages(pagetable, va, PGSIZE, (uint64)newpa, flags) < 0) return -1;
+  printf("new map: va(%p) to pa(%p)\n", va, newpa);
+  printf("new map's PTE_W is %d, PTE_COW is %d\n", !!(*pte&PTE_W), !!(*pte&PTE_COW));
+  printf("\n");
+  
+  return 0;
+}
+
 // mark a PTE invalid for user access.
 // used by exec for the user stack guard page.
 void
