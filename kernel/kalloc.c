@@ -27,20 +27,18 @@ int ref[32768] = {0}; // reference count array
 #define INDEX(p) ((p-KERNBASE)/4096)
 
 
-int incrementref(uint64 pa){
-  if(pa > KERNBASE && pa < PHYSTOP){
-    if(ref[INDEX(pa)] < 65535){ // max ref count by myself
-      acquire(&kmem.lock);
-      ref[INDEX(pa)]++;
-      release(&kmem.lock);
-      return 0;
-    }
-    else 
-      return -1;
-  }
-  else{
-    return -1;
-  }
+void incrementref(uint64 pa){
+  if(pa <= KERNBASE || pa >= PHYSTOP)
+    panic("incrementref: unvalid pa");
+
+  if(ref[INDEX(pa)] >= 65535) // max ref count by myself
+    panic("incrementref: ref count has reach to max");
+
+  acquire(&kmem.lock);
+  ref[INDEX(pa)]++;
+  release(&kmem.lock);
+  return;
+
 }
 
 void

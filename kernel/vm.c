@@ -322,8 +322,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     // it is also ok to set before, but need to restore when map failed
     *pte |= PTE_COW;
     *pte &= ~PTE_W; 
-    if(incrementref(pa) < 0) // ref++
-      panic("increment ref failed");
+    incrementref(pa); // ref++
   }
   return 0;
 
@@ -356,10 +355,9 @@ int handle_store_pagefault(pagetable_t pagetable, uint64 va){
   }
   memmove((void*)newpa, (void*)pa, PGSIZE);
 
-  //set PTE_W, clear PTE_COW, save flags
-  uint flags = PTE_FLAGS(*pte);
-  flags |= PTE_W;
-  flags &= ~PTE_COW;
+  uint flags = PTE_FLAGS(*pte); // save flags
+  flags |= PTE_W; // writable
+  if(flags & PTE_COW) flags &= ~PTE_COW; // clear PTE_COW if it is a COW page 
 
   *pte = PA2PTE(newpa) | flags; // modify pte directly
   
@@ -397,7 +395,7 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
     pte = walk(pagetable,va0, 0);
     if(pte == 0 || (*pte & PTE_V) == 0 || (*pte & PTE_U) == 0)
       return -1;
-    if((*pte & PTE_W ) == 0) // dst is unwritable
+    if((*pte & PTE_W) == 0) // dst is unwritable
       if(handle_store_pagefault(pagetable, va0) < 0)
         return -1;
 
