@@ -1,0 +1,18 @@
+{
+    "files.associations": {
+        "array": "c",
+        "*.tcc": "c",
+        "charconv": "c",
+        "functional": "c",
+        "memory": "c",
+        "tuple": "c",
+        "limits": "c",
+        "ostream": "c",
+        "numeric": "c",
+        "streambuf": "c",
+        "utility": "c",
+        "variant": "c",
+        "compare": "c",
+        "format": "c"
+    }
+}
