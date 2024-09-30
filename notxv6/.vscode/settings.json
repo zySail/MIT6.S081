@@ -13,6 +13,7 @@
         "utility": "c",
         "variant": "c",
         "compare": "c",
-        "format": "c"
+        "format": "c",
+        "random": "c"
     }
 }
