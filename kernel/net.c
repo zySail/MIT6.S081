@@ -365,10 +365,14 @@ void net_rx(struct mbuf *m)
   }
 
   type = ntohs(ethhdr->type);
-  if (type == ETHTYPE_IP)
+  if (type == ETHTYPE_IP){
+    //printf("IP received\n");
     net_rx_ip(m);
-  else if (type == ETHTYPE_ARP)
+  }
+  else if (type == ETHTYPE_ARP){
+    //printf("ARP received\n");
     net_rx_arp(m);
+  }
   else
     mbuffree(m);
 }
