@@ -108,52 +108,17 @@ e1000_transmit(struct mbuf *m)
     release(&e1000_lock);
     return -1;
   }
-  if(rx_mbufs[index]) // free the mbuf which has transmitted (if there was one)
-    mbuffree(rx_mbufs[index]); 
+  if(tx_mbufs[index]) // free the mbuf which has transmitted (if there was one)
+    mbuffree(tx_mbufs[index]); 
   tx_ring[index].addr = (uint64)m->head; // fill in the descriptor
   tx_ring[index].length = m->len;
   tx_ring[index].cmd = 0;
   tx_ring[index].cmd |= E1000_TXD_CMD_EOP | E1000_TXD_CMD_RS;
-  rx_mbufs[index] = m; // save a pointer to m
+  tx_mbufs[index] = m; // save a pointer to m
   regs[E1000_TDT] = (regs[E1000_TDT] + 1) % TX_RING_SIZE; // update index
   release(&e1000_lock);
   return 0;
 }
-
-// int
-// e1000_transmit(struct mbuf *m)
-// {
-//   acquire(&e1000_lock); // 获取 E1000 的锁，防止多进程同时发送数据出现 race
-
-//   uint32 ind = regs[E1000_TDT]; // 下一个可用的 buffer 的下标
-//   struct tx_desc *desc = &tx_ring[ind]; // 获取 buffer 的描述符，其中存储了关于该 buffer 的各种信息
-//   // 如果该 buffer 中的数据还未传输完，则代表我们已经将环形 buffer 列表全部用完，缓冲区不足，返回错误
-//   if(!(desc->status & E1000_TXD_STAT_DD)) {
-//     release(&e1000_lock);
-//     return -1;
-//   }
-  
-//   // 如果该下标仍有之前发送完毕但未释放的 mbuf，则释放
-//   if(tx_mbufs[ind]) {
-//     mbuffree(tx_mbufs[ind]);
-//     tx_mbufs[ind] = 0;
-//   }
-
-//   // 将要发送的 mbuf 的内存地址与长度填写到发送描述符中
-//   desc->addr = (uint64)m->head;
-//   desc->length = m->len;
-//   // 设置参数，EOP 表示该 buffer 含有一个完整的 packet
-//   // RS 告诉网卡在发送完成后，设置 status 中的 E1000_TXD_STAT_DD 位，表示发送完成。
-//   desc->cmd = E1000_TXD_CMD_EOP | E1000_TXD_CMD_RS;
-//   // 保留新 mbuf 的指针，方便后续再次用到同一下标时释放。
-//   tx_mbufs[ind] = m;
-
-//   // 环形缓冲区内下标增加一。
-//   regs[E1000_TDT] = (regs[E1000_TDT] + 1) % TX_RING_SIZE;
-  
-//   release(&e1000_lock);
-//   return 0;
-// }
 
 static void
 e1000_recv(void)
@@ -165,7 +130,6 @@ e1000_recv(void)
   // Create and deliver an mbuf for each packet (using net_rx()).
   //
   struct mbuf *m;
-  //acquire(&e1000_lock);
   uint64 index = (regs[E1000_RDT] + 1) % RX_RING_SIZE; // get index
   while(rx_ring[index].status & E1000_RXD_STAT_DD){ // check if a new packect is available
     rx_mbufs[index]->len = rx_ring[index].length; // update mbuf->len
@@ -173,7 +137,6 @@ e1000_recv(void)
     m = mbufalloc(0); // allocate a new mbuf
     if(!m){
       printf("allocate new mbuf fail\n");
-      //release(&e1000_lock);
       return;
     }
     rx_mbufs[index] = m; // replace the one just given to net_rx()
@@ -182,7 +145,6 @@ e1000_recv(void)
     index = (index + 1) % RX_RING_SIZE; // next index
   }
   regs[E1000_RDT] = (index + RX_RING_SIZE - 1) % RX_RING_SIZE; // update the register to be the index of the last ring descriptor processed
-  //release(&e1000_lock);
   return;
 }
 
