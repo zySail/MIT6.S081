@@ -94,7 +94,7 @@ binit(void)
     initlock(&bcache.hashtbl.bucket_lock[i], "bcache");
     bcache.hashtbl.bucket[i] = 0;
   }
-  // make buf to a link and add to bucket 0
+  // make buf into a double link and add to bucket 0
   for(int i = 0; i < NBUF; i++){ 
     bcache.buf[i].timestamp = 0;
     // set next
@@ -173,8 +173,9 @@ bget(uint dev, uint blockno)
   // part2: move lru buf
   // remove LRU buf from old bucket
   // bucket_lock[lru_key] is being holded
+  if(lru_key != key)
+    acquire(&bcache.hashtbl.bucket_lock[key]);
   delete(lru_key, b); 
-  release(&bcache.hashtbl.bucket_lock[lru_key]);
 
   // modify buf
   b->dev = dev;
@@ -185,9 +186,11 @@ bget(uint dev, uint blockno)
   b->timestamp = ticks;
   release(&tickslock);
   // insert into new bucket
-  acquire(&bcache.hashtbl.bucket_lock[key]);
   insert(key, b);
-  release(&bcache.hashtbl.bucket_lock[key]);
+
+  release(&bcache.hashtbl.bucket_lock[lru_key]);
+  if(lru_key != key)
+    release(&bcache.hashtbl.bucket_lock[key]);
 
   release(&bcache.lock);
 
