@@ -26,8 +26,7 @@ createfile(char *file, int nblock)
   int fd;
   char buf[BSIZE];
   int i;
-  
-  fd = open(file, O_CREATE | O_RDWR);
+  fd = open(file, O_CREATE | O_RDWR); // panic here
   if(fd < 0){
     printf("createfile %s failed\n", file);
     exit(-1);
@@ -102,7 +101,7 @@ test0()
       exit(1);
     }
     unlink(file);
-    createfile(file, N);
+    createfile(file, N); // cause panic: ilock: no type 
     if (chdir("..") < 0) {
       printf("chdir failed\n");
       exit(1);

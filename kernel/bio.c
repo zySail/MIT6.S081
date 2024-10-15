@@ -23,12 +23,12 @@
 #include "fs.h"
 #include "buf.h"
 
-#define NR_HASH 13
 
 /*
 define head: "struct buf hash_table[NR_HASH];" will be more convenient
 but head buf will cost a lot of space due to buf's "uchar data[BSIZE]";
 */
+#define NR_HASH 13
 
 struct hash_table{
   struct spinlock bucket_lock[NR_HASH];
@@ -43,12 +43,12 @@ struct {
 
 // hash_table's functions
 // --------------------------------------------------------------
-uint64 hash(uint dev, uint blockno){
+uint hash(uint dev, uint blockno){
   return (dev ^ blockno) % NR_HASH;
 }
 
 // insert buf node b into hash bucket[key]
-void insert(uint64 key, struct buf *b){
+void insert(uint key, struct buf *b){
   if(!b || key >= NR_HASH )
     panic("insert");
 
@@ -66,7 +66,7 @@ void insert(uint64 key, struct buf *b){
 }
 
 // delete buf node b from hash bucket[key]
-void delete(uint64 key, struct buf *b){
+void delete(uint key, struct buf *b){
   if(!b || key >= NR_HASH )
     panic("delete");
 
@@ -94,6 +94,21 @@ binit(void)
     initlock(&bcache.hashtbl.bucket_lock[i], "bcache");
     bcache.hashtbl.bucket[i] = 0;
   }
+  // make buf to a link and add to bucket 0
+  for(int i = 0; i < NBUF; i++){ 
+    bcache.buf[i].timestamp = 0;
+    // set next
+    if(i == NBUF - 1)
+      bcache.buf[i].next = 0;
+    else
+      bcache.buf[i].next = &bcache.buf[i+1];
+    // set prev
+    if(i == 0)
+      bcache.buf[i].prev = 0;
+    else  
+      bcache.buf[i].prev = &bcache.buf[i-1];
+  }
+  bcache.hashtbl.bucket[0] = &bcache.buf[0];
 }
 
 // Look through buffer cache for block on device dev.
@@ -103,19 +118,19 @@ static struct buf*
 bget(uint dev, uint blockno)
 {
   struct buf *b;
+  uint key;
 
-  uint64 lastest_time = 0;
-  struct buf *LRU_buf;
-  uint64 LRU_buf_key;
-
-  uint64 key = hash(dev, blockno);
-  acquire(&bcache.hash_bucket_lock[key]); // get bucket lock
-
+  key = hash(dev, blockno);
+  acquire(&bcache.hashtbl.bucket_lock[key]); // acquire bucket lock
   // Is the block already cached?
-  for(b = bcache.hash_table[key]; b != 0; b = b->next){ // search in the bucket
+  for(b = bcache.hashtbl.bucket[key]; b; b = b->next){ // search in the bucket
     if(b->dev == dev && b->blockno == blockno){
       b->refcnt++;
-      release(&bcache.hash_bucket_lock[key]);
+      release(&bcache.hashtbl.bucket_lock[key]);
+      // record last used time
+      acquire(&tickslock);
+      b->timestamp = ticks; 
+      release(&tickslock);
       acquiresleep(&b->lock);
       return b;
     }
@@ -123,58 +138,61 @@ bget(uint dev, uint blockno)
 
   // Not cached.
   // Recycle the least recently used (LRU) unused buffer.
-  /*
-    must release bucket.lock first to avoid dead lock
-    if current proc acquire bcache.lock without release bucket.lock(*)
-    unfortunately, another proc iterate over buf[] with holding bcache.lock
-    when it acquire bucket.lock(*), dead lock
-  */
-  release(&bcache.hash_bucket_lock[key]);
+  uint min_timestap = 9999999;
+  uint lru_key = NR_HASH; // the lru buf's bucket key
+  int findbetter = 0; // record whether find a better buf in the bucket
+  struct buf *t; // used in for loop to iterate bucket
+
+  release(&bcache.hashtbl.bucket_lock[key]); // release bucket.lock first to avoid dead lock
   acquire(&bcache.lock);
-  acquire(&bcache.hash_bucket_lock[key]);
   
-  // iterate over buf[], look for LRU_buf
-  for(int i = 0; i < NBUF; i++){
-    if(bcache.buf[i].refcnt == 0) {
-      if(bcache.buf[i].last_used_time > lastest_time){
-        LRU_buf = &bcache.buf[i];
-        lastest_time = bcache.buf[i].last_used_time;
+  // part1: find the lru buf
+  b = 0;
+  for(int i = 0; i < NR_HASH; i++){ // iterate over every bucket
+    findbetter = 0;
+    acquire(&bcache.hashtbl.bucket_lock[i]);
+    for(t = bcache.hashtbl.bucket[i]; t; t = t->next){ // search in bucket[i]
+      if(t->refcnt == 0 && t->timestamp <= min_timestap){
+        b = t;
+        min_timestap = t->timestamp;
+        findbetter = 1;
       }
     }
+    if(!findbetter){ // not find a better buf in bucket[i]
+      release(&bcache.hashtbl.bucket_lock[i]);
+    }
+    else{ // find a better buf in bucket[i]
+      if(lru_key < NR_HASH) // release the old lru buf's bucket.lock if there is old record
+        release(&bcache.hashtbl.bucket_lock[lru_key]);
+      lru_key = i;
+    }
   }
-  if(!LRU_buf)
-    panic("bget: no buffers");
+  if(!b)
+    panic("bget: no buffer can be recyled");
   
-  // remove LRU_buf from old hash bucket
-  LRU_buf_key = hash(LRU_buf->dev, LRU_buf->blockno);
-  acquire(&bcache.hash_bucket_lock[LRU_buf_key]);
-  if(bcache.hash_table[LRU_buf_key] == LRU_buf){ // check if the head is the target
-    bcache.hash_table[LRU_buf_key] = LRU_buf->next;
-  }
-  else{
-    b = bcache.hash_table[LRU_buf_key];
-    while(b != 0){
-        if(b->next == LRU_buf){
-          b->next = LRU_buf->next;
-        }
-        b++;
-      }
-  }
-  
-  // modify LRU_buf, and move it to new bucket
-  LRU_buf->dev = dev;
-  LRU_buf->blockno = blockno;
-  LRU_buf->valid = 0;
-  LRU_buf->refcnt = 1;
-  LRU_buf->next = bcache.hash_table[key]->next;
-  bcache.hash_table[key]->next = LRU_buf;
+  // part2: move lru buf
+  // remove LRU buf from old bucket
+  // bucket_lock[lru_key] is being holded
+  delete(lru_key, b); 
+  release(&bcache.hashtbl.bucket_lock[lru_key]);
 
-  release(&bcache.hash_bucket_lock[LRU_buf_key]);
-  release(&bcache.hash_bucket_lock[key]);
+  // modify buf
+  b->dev = dev;
+  b->blockno = blockno;
+  b->valid = 0;
+  b->refcnt = 1;
+  acquire(&tickslock);
+  b->timestamp = ticks;
+  release(&tickslock);
+  // insert into new bucket
+  acquire(&bcache.hashtbl.bucket_lock[key]);
+  insert(key, b);
+  release(&bcache.hashtbl.bucket_lock[key]);
+
   release(&bcache.lock);
-  // return LRU_buf
-  acquiresleep(&LRU_buf->lock);
-  return LRU_buf;
+
+  acquiresleep(&b->lock);
+  return b;
 }
 
 // Return a locked buf with the contents of the indicated block.
@@ -201,46 +219,36 @@ bwrite(struct buf *b)
 }
 
 // Release a locked buffer.
-// Move to the head of the most-recently-used list.
 void
 brelse(struct buf *b)
 {
   if(!holdingsleep(&b->lock))
     panic("brelse");
 
-  // record last used time
-  acquire(&tickslock);
-  b->last_used_time = ticks; 
-  release(&tickslock);
-
   releasesleep(&b->lock); // release buf b's sleeplock
 
-  acquire(&bcache.lock);
-  b->refcnt--;
-  if (b->refcnt == 0) {
-    // no one is waiting for it.
-    b->next->prev = b->prev;
-    b->prev->next = b->next;
-    b->next = bcache.head.next;
-    b->prev = &bcache.head;
-    bcache.head.next->prev = b;
-    bcache.head.next = b;
+  uint key = hash(b->dev, b->blockno);
+  acquire(&bcache.hashtbl.bucket_lock[key]);
+  if (b->refcnt > 0) {
+    b->refcnt--;
   }
-  release(&bcache.lock);
+  release(&bcache.hashtbl.bucket_lock[key]);
 }
 
 void
 bpin(struct buf *b) {
-  acquire(&bcache.lock);
+  uint key = hash(b->dev, b->blockno);
+  acquire(&bcache.hashtbl.bucket_lock[key]);
   b->refcnt++;
-  release(&bcache.lock);
+  release(&bcache.hashtbl.bucket_lock[key]);
 }
 
 void
 bunpin(struct buf *b) {
-  acquire(&bcache.lock);
+  uint key = hash(b->dev, b->blockno);
+  acquire(&bcache.hashtbl.bucket_lock[key]);
   b->refcnt--;
-  release(&bcache.lock);
+  release(&bcache.hashtbl.bucket_lock[key]);
 }
 
 
