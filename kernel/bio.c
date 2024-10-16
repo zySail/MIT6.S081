@@ -142,7 +142,7 @@ bget(uint dev, uint blockno)
   release(&bcache.hashtbl.bucket_lock[key]); // release bucket.lock first to avoid dead lock
   acquire(&bcache.lock);
   
-  // part1: find the lru buf
+  // find the lru buf
   b = 0;
   for(int i = 0; i < NR_HASH; i++){ // iterate over every bucket
     findbetter = 0;
@@ -165,7 +165,6 @@ bget(uint dev, uint blockno)
   if(!b)
     panic("bget: no buffer can be recyled");
   
-  // part2: move lru buf
   // remove LRU buf from old bucket
   // bucket_lock[lru_key] is being holded
   if(lru_key != key)
