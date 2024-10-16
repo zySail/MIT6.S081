@@ -135,7 +135,6 @@ bget(uint dev, uint blockno)
 
   // Not cached.
   // Recycle the least recently used (LRU) unused buffer.
-  uint min_timestap = ~0; // max uint
   uint lru_key = NR_HASH; // the lru buf's bucket key
   int findbetter = 0; // record whether find a better buf in the bucket
   struct buf *t; // used in for loop to iterate bucket
@@ -149,9 +148,8 @@ bget(uint dev, uint blockno)
     findbetter = 0;
     acquire(&bcache.hashtbl.bucket_lock[i]);
     for(t = bcache.hashtbl.bucket[i]; t; t = t->next){ // search in bucket[i]
-      if(t->refcnt == 0 && t->timestamp < min_timestap){
+      if(t->refcnt == 0 && (b == 0 || t->timestamp < b->timestamp)){
         b = t;
-        min_timestap = t->timestamp;
         findbetter = 1;
       }
     }
