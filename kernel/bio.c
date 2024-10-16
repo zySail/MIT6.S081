@@ -147,10 +147,9 @@ bget(uint dev, uint blockno)
     }
   }
 
-  // search in other buckets
-  uint lru_key = NR_HASH; // the lru buf's bucket key
-  int findbetter = 0; // record whether find a better buf in the bucket
-  struct buf *t; // used in for loop to iterate bucket
+  // bucket[key] has no free buf, search in other buckets
+  uint lru_key;
+  struct buf *t;
 
   release(&bcache.hashtbl.bucket_lock[key]);
   acquire(&bcache.lock);
@@ -165,34 +164,33 @@ bget(uint dev, uint blockno)
     }
   }
   
-  // find the lru buf
+  // look for the lru buf
   b = 0;
   for(int i = 0; i < NR_HASH; i++){ // iterate over every bucket
     if(i == key)
       continue;
-    findbetter = 0;
     acquire(&bcache.hashtbl.bucket_lock[i]);
     for(t = bcache.hashtbl.bucket[i]; t; t = t->next){ // search in bucket[i]
       if(t->refcnt == 0 && (b == 0 || t->timestamp < b->timestamp)){
         b = t;
-        findbetter = 1;
       }
     }
-    if(!findbetter){ // not find a better buf in bucket[i]
-      release(&bcache.hashtbl.bucket_lock[i]);
+    if(b){
+      break;
     }
-    else{ // find a better buf in bucket[i]
-      if(lru_key < NR_HASH) // release the old lru buf's bucket.lock if there is old record
-        release(&bcache.hashtbl.bucket_lock[lru_key]);
-      lru_key = i; // record new lru_key
+    else{
+      release(&bcache.hashtbl.bucket_lock[i]);
     }
   }
   if(!b)
     panic("bget: no buffer can be recyled");
   
-  // remove LRU buf from old bucket
+  // move buf
   // bucket_lock[lru_key] and bucket_lock[key] is being holded
+  lru_key = hash(b->dev, b->blockno);
+  // remove LRU buf from old bucket
   delete(lru_key, b); 
+  release(&bcache.hashtbl.bucket_lock[lru_key]);
 
   // modify buf
   b->dev = dev;
@@ -201,9 +199,8 @@ bget(uint dev, uint blockno)
   b->refcnt = 1;
   // insert into new bucket
   insert(key, b);
-
-  release(&bcache.hashtbl.bucket_lock[lru_key]);
   release(&bcache.hashtbl.bucket_lock[key]);
+
   release(&bcache.lock);
 
   acquiresleep(&b->lock);
