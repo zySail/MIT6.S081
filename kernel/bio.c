@@ -119,11 +119,7 @@ bget(uint dev, uint blockno)
 {
   struct buf *b;
   uint key;
-  uint timestamp;
-
-  acquire(&tickslock);
-  timestamp = ticks;
-  release(&tickslock);
+  
 
   key = hash(dev, blockno);
   acquire(&bcache.hashtbl.bucket_lock[key]); // acquire bucket lock
@@ -131,7 +127,6 @@ bget(uint dev, uint blockno)
   for(b = bcache.hashtbl.bucket[key]; b; b = b->next){ // search in the bucket
     if(b->dev == dev && b->blockno == blockno){
       b->refcnt++;
-      b->timestamp = timestamp; // record last used time
       release(&bcache.hashtbl.bucket_lock[key]);
       acquiresleep(&b->lock);
       return b;
@@ -184,7 +179,6 @@ bget(uint dev, uint blockno)
   b->blockno = blockno;
   b->valid = 0;
   b->refcnt = 1;
-  b->timestamp = timestamp;
   // insert into new bucket
   insert(key, b);
 
@@ -230,10 +224,15 @@ brelse(struct buf *b)
 
   releasesleep(&b->lock); // release buf b's sleeplock
 
+  acquire(&tickslock);
+  uint timestamp = ticks;
+  release(&tickslock);
+
   uint key = hash(b->dev, b->blockno);
   acquire(&bcache.hashtbl.bucket_lock[key]);
   if (b->refcnt > 0) {
     b->refcnt--;
+    b->timestamp = timestamp;
   }
   release(&bcache.hashtbl.bucket_lock[key]);
 }
