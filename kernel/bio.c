@@ -122,9 +122,9 @@ bget(uint dev, uint blockno)
   
 
   key = hash(dev, blockno);
-  acquire(&bcache.hashtbl.bucket_lock[key]); // acquire bucket lock
+  acquire(&bcache.hashtbl.bucket_lock[key]);
   // Is the block already cached?
-  for(b = bcache.hashtbl.bucket[key]; b; b = b->next){ // search in the bucket
+  for(b = bcache.hashtbl.bucket[key]; b; b = b->next){
     if(b->dev == dev && b->blockno == blockno){
       b->refcnt++;
       release(&bcache.hashtbl.bucket_lock[key]);
@@ -134,17 +134,42 @@ bget(uint dev, uint blockno)
   }
 
   // Not cached.
-  // Recycle the least recently used (LRU) unused buffer.
+  // first search in its bucket for a free buf
+  for(b = bcache.hashtbl.bucket[key]; b; b = b->next){
+    if(b->refcnt == 0){
+      b->dev = dev;
+      b->blockno = blockno;
+      b->valid = 0;
+      b->refcnt = 1;
+      release(&bcache.hashtbl.bucket_lock[key]);
+      acquiresleep(&b->lock);
+      return b;
+    }
+  }
+
+  // search in other buckets
   uint lru_key = NR_HASH; // the lru buf's bucket key
   int findbetter = 0; // record whether find a better buf in the bucket
   struct buf *t; // used in for loop to iterate bucket
 
-  release(&bcache.hashtbl.bucket_lock[key]); // release bucket.lock first to avoid dead lock
+  release(&bcache.hashtbl.bucket_lock[key]);
   acquire(&bcache.lock);
+  acquire(&bcache.hashtbl.bucket_lock[key]);
+  for(b = bcache.hashtbl.bucket[key]; b; b = b->next){
+    if(b->dev == dev && b->blockno == blockno){
+      b->refcnt++;
+      release(&bcache.hashtbl.bucket_lock[key]);
+      release(&bcache.lock);
+      acquiresleep(&b->lock);
+      return b;
+    }
+  }
   
   // find the lru buf
   b = 0;
   for(int i = 0; i < NR_HASH; i++){ // iterate over every bucket
+    if(i == key)
+      continue;
     findbetter = 0;
     acquire(&bcache.hashtbl.bucket_lock[i]);
     for(t = bcache.hashtbl.bucket[i]; t; t = t->next){ // search in bucket[i]
@@ -166,9 +191,7 @@ bget(uint dev, uint blockno)
     panic("bget: no buffer can be recyled");
   
   // remove LRU buf from old bucket
-  // bucket_lock[lru_key] is being holded
-  if(lru_key != key)
-    acquire(&bcache.hashtbl.bucket_lock[key]);
+  // bucket_lock[lru_key] and bucket_lock[key] is being holded
   delete(lru_key, b); 
 
   // modify buf
@@ -180,9 +203,7 @@ bget(uint dev, uint blockno)
   insert(key, b);
 
   release(&bcache.hashtbl.bucket_lock[lru_key]);
-  if(lru_key != key)
-    release(&bcache.hashtbl.bucket_lock[key]);
-
+  release(&bcache.hashtbl.bucket_lock[key]);
   release(&bcache.lock);
 
   acquiresleep(&b->lock);
