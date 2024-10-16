@@ -119,6 +119,11 @@ bget(uint dev, uint blockno)
 {
   struct buf *b;
   uint key;
+  uint timestamp;
+
+  acquire(&tickslock);
+  timestamp = ticks;
+  release(&tickslock);
 
   key = hash(dev, blockno);
   acquire(&bcache.hashtbl.bucket_lock[key]); // acquire bucket lock
@@ -126,11 +131,8 @@ bget(uint dev, uint blockno)
   for(b = bcache.hashtbl.bucket[key]; b; b = b->next){ // search in the bucket
     if(b->dev == dev && b->blockno == blockno){
       b->refcnt++;
+      b->timestamp = timestamp; // record last used time
       release(&bcache.hashtbl.bucket_lock[key]);
-      // record last used time
-      acquire(&tickslock);
-      b->timestamp = ticks; 
-      release(&tickslock);
       acquiresleep(&b->lock);
       return b;
     }
@@ -138,7 +140,7 @@ bget(uint dev, uint blockno)
 
   // Not cached.
   // Recycle the least recently used (LRU) unused buffer.
-  uint min_timestap = 9999999;
+  uint min_timestap = ~0; // max uint
   uint lru_key = NR_HASH; // the lru buf's bucket key
   int findbetter = 0; // record whether find a better buf in the bucket
   struct buf *t; // used in for loop to iterate bucket
@@ -152,7 +154,7 @@ bget(uint dev, uint blockno)
     findbetter = 0;
     acquire(&bcache.hashtbl.bucket_lock[i]);
     for(t = bcache.hashtbl.bucket[i]; t; t = t->next){ // search in bucket[i]
-      if(t->refcnt == 0 && t->timestamp <= min_timestap){
+      if(t->refcnt == 0 && t->timestamp < min_timestap){
         b = t;
         min_timestap = t->timestamp;
         findbetter = 1;
@@ -164,7 +166,7 @@ bget(uint dev, uint blockno)
     else{ // find a better buf in bucket[i]
       if(lru_key < NR_HASH) // release the old lru buf's bucket.lock if there is old record
         release(&bcache.hashtbl.bucket_lock[lru_key]);
-      lru_key = i;
+      lru_key = i; // record new lru_key
     }
   }
   if(!b)
@@ -182,9 +184,7 @@ bget(uint dev, uint blockno)
   b->blockno = blockno;
   b->valid = 0;
   b->refcnt = 1;
-  acquire(&tickslock);
-  b->timestamp = ticks;
-  release(&tickslock);
+  b->timestamp = timestamp;
   // insert into new bucket
   insert(key, b);
 
