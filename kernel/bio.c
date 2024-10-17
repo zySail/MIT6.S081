@@ -163,12 +163,12 @@ bget(uint dev, uint blockno)
   }
   
   // look for the lru buf
-  uint lru_key;
   struct buf *t;
   b = 0;
-  for(int i = 0; i < NR_HASH; i++){ // iterate over every bucket
-    if(i == key)
-      continue;
+  for(int i = (key + 1) % NR_HASH; i != key; i = (i + 1) % NR_HASH){
+  // for(int i = 0; i < NR_HASH; i++){ // iterate over every bucket
+  //   if(i == key)
+  //     continue;
     acquire(&bcache.hashtbl.bucket_lock[i]);
     for(t = bcache.hashtbl.bucket[i]; t; t = t->next){ // search in bucket[i]
       if(t->refcnt == 0 && (b == 0 || t->timestamp < b->timestamp)){
@@ -177,7 +177,7 @@ bget(uint dev, uint blockno)
     }
     if(b){
       // move buf
-      lru_key = hash(b->dev, b->blockno);
+      uint lru_key = hash(b->dev, b->blockno);
       delete(lru_key, b); // remove LRU buf from old bucket
       release(&bcache.hashtbl.bucket_lock[lru_key]);
       // modify buf
