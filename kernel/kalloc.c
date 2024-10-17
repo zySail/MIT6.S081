@@ -83,8 +83,10 @@ kalloc(void)
   r = kmem[id].freelist;
   if(r){
     kmem[id].freelist = r->next;
+    release(&kmem[id].lock);
   }
   else{
+    release(&kmem[id].lock);
     for(int i = 0; i < NCPU; i++){
       if(i == id) continue;
       acquire(&kmem[i].lock);
@@ -97,7 +99,7 @@ kalloc(void)
       release(&kmem[i].lock);
     }
   }
-  release(&kmem[id].lock);
+  
 
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
