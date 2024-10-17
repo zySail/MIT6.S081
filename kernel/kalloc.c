@@ -99,6 +99,7 @@ kalloc(void)
       release(&kmem[i].lock);
     }
   }
+  //release(&kmem[id].lock);
   
 
   if(r)
