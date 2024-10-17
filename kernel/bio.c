@@ -44,7 +44,8 @@ struct {
 // hash_table's functions
 // --------------------------------------------------------------
 uint hash(uint dev, uint blockno){
-  return (dev ^ blockno) % NR_HASH;
+  //return (dev ^ blockno) % NR_HASH;
+  return (blockno) % NR_HASH;
 }
 
 // insert buf node b into hash bucket[key]
