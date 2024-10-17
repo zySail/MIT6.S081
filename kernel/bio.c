@@ -48,7 +48,7 @@ uint hash(uint dev, uint blockno){
 }
 
 // insert buf node b into hash bucket[key]
-void insert(uint key, struct buf *b){
+static void insert(uint key, struct buf *b){
   if(!b || key >= NR_HASH )
     panic("insert");
 
@@ -66,7 +66,7 @@ void insert(uint key, struct buf *b){
 }
 
 // delete buf node b from hash bucket[key]
-void delete(uint key, struct buf *b){
+static void delete(uint key, struct buf *b){
   if(!b || key >= NR_HASH )
     panic("delete");
 
@@ -148,8 +148,6 @@ bget(uint dev, uint blockno)
   }
 
   // bucket[key] has no free buf, search in other buckets
-  uint lru_key;
-  struct buf *t;
 
   release(&bcache.hashtbl.bucket_lock[key]);
   acquire(&bcache.lock);
@@ -165,6 +163,8 @@ bget(uint dev, uint blockno)
   }
   
   // look for the lru buf
+  uint lru_key;
+  struct buf *t;
   b = 0;
   for(int i = 0; i < NR_HASH; i++){ // iterate over every bucket
     if(i == key)
@@ -176,35 +176,26 @@ bget(uint dev, uint blockno)
       }
     }
     if(b){
-      break;
+      // move buf
+      lru_key = hash(b->dev, b->blockno);
+      delete(lru_key, b); // remove LRU buf from old bucket
+      release(&bcache.hashtbl.bucket_lock[lru_key]);
+      // modify buf
+      b->dev = dev;
+      b->blockno = blockno;
+      b->valid = 0;
+      b->refcnt = 1;
+      insert(key, b); // insert into new bucket
+      release(&bcache.hashtbl.bucket_lock[key]);
+      release(&bcache.lock);
+      acquiresleep(&b->lock);
+      return b;
     }
     else{
       release(&bcache.hashtbl.bucket_lock[i]);
     }
   }
-  if(!b)
-    panic("bget: no buffer can be recyled");
-  
-  // move buf
-  // bucket_lock[lru_key] and bucket_lock[key] is being holded
-  lru_key = hash(b->dev, b->blockno);
-  // remove LRU buf from old bucket
-  delete(lru_key, b); 
-  release(&bcache.hashtbl.bucket_lock[lru_key]);
-
-  // modify buf
-  b->dev = dev;
-  b->blockno = blockno;
-  b->valid = 0;
-  b->refcnt = 1;
-  // insert into new bucket
-  insert(key, b);
-  release(&bcache.hashtbl.bucket_lock[key]);
-
-  release(&bcache.lock);
-
-  acquiresleep(&b->lock);
-  return b;
+  panic("bget: no buffer can be recyled");
 }
 
 // Return a locked buf with the contents of the indicated block.
