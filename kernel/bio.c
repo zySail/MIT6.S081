@@ -43,8 +43,8 @@ struct {
 
 // hash_table's functions
 // --------------------------------------------------------------
-uint hash(uint dev, uint blockno){
-  //return (dev ^ blockno) % NR_HASH;
+uint hash(uint blockno){
+  //return (dev ^ blockno) % NR_HASH; // lock conflict
   return (blockno) % NR_HASH;
 }
 
@@ -67,10 +67,11 @@ static void insert(uint key, struct buf *b){
 }
 
 // delete buf node b from hash bucket[key]
-static void delete(uint key, struct buf *b){
-  if(!b || key >= NR_HASH )
+static void delete(struct buf *b){
+  if(!b)
     panic("delete");
 
+  uint key = hash(b->blockno);
   if(b->prev == 0){ // b is the first buf node
     if(b->next)
       b->next->prev = 0;
@@ -90,9 +91,9 @@ static void delete(uint key, struct buf *b){
 void
 binit(void)
 {
-  initlock(&bcache.lock, "bcache");
+  initlock(&bcache.lock, "bcache.lock");
   for(int i = 0; i < NR_HASH; i++){
-    initlock(&bcache.hashtbl.bucket_lock[i], "bcache");
+    initlock(&bcache.hashtbl.bucket_lock[i], "bcache.bucket_lock");
     bcache.hashtbl.bucket[i] = 0;
   }
   // make buf into a double link and add to bucket 0
@@ -119,10 +120,8 @@ static struct buf*
 bget(uint dev, uint blockno)
 {
   struct buf *b;
-  uint key;
-  
+  uint key = hash(blockno);
 
-  key = hash(dev, blockno);
   acquire(&bcache.hashtbl.bucket_lock[key]);
   // Is the block already cached?
   for(b = bcache.hashtbl.bucket[key]; b; b = b->next){
@@ -149,7 +148,7 @@ bget(uint dev, uint blockno)
   }
 
   // bucket[key] has no free buf, search in other buckets
-
+  // acquire bcache.lock
   release(&bcache.hashtbl.bucket_lock[key]);
   acquire(&bcache.lock);
   acquire(&bcache.hashtbl.bucket_lock[key]);
@@ -166,10 +165,10 @@ bget(uint dev, uint blockno)
   // look for the lru buf
   struct buf *t;
   b = 0;
-  for(int i = (key + 1) % NR_HASH; i != key; i = (i + 1) % NR_HASH){
-  // for(int i = 0; i < NR_HASH; i++){ // iterate over every bucket
-  //   if(i == key)
-  //     continue;
+  //for(int i = (key + 1) % NR_HASH; i != key; i = (i + 1) % NR_HASH){
+  for(int i = 0; i < NR_HASH; i++){
+    if(i == key)
+      continue;
     acquire(&bcache.hashtbl.bucket_lock[i]);
     for(t = bcache.hashtbl.bucket[i]; t; t = t->next){ // search in bucket[i]
       if(t->refcnt == 0 && (b == 0 || t->timestamp < b->timestamp)){
@@ -178,8 +177,8 @@ bget(uint dev, uint blockno)
     }
     if(b){
       // move buf
-      uint lru_key = hash(b->dev, b->blockno);
-      delete(lru_key, b); // remove LRU buf from old bucket
+      uint lru_key = hash(b->blockno);
+      delete(b); // remove LRU buf from old bucket
       release(&bcache.hashtbl.bucket_lock[lru_key]);
       // modify buf
       b->dev = dev;
@@ -235,7 +234,7 @@ brelse(struct buf *b)
   uint timestamp = ticks;
   release(&tickslock);
 
-  uint key = hash(b->dev, b->blockno);
+  uint key = hash(b->blockno);
   acquire(&bcache.hashtbl.bucket_lock[key]);
   if (b->refcnt > 0) {
     b->refcnt--;
@@ -246,7 +245,7 @@ brelse(struct buf *b)
 
 void
 bpin(struct buf *b) {
-  uint key = hash(b->dev, b->blockno);
+  uint key = hash(b->blockno);
   acquire(&bcache.hashtbl.bucket_lock[key]);
   b->refcnt++;
   release(&bcache.hashtbl.bucket_lock[key]);
@@ -254,7 +253,7 @@ bpin(struct buf *b) {
 
 void
 bunpin(struct buf *b) {
-  uint key = hash(b->dev, b->blockno);
+  uint key = hash(b->blockno);
   acquire(&bcache.hashtbl.bucket_lock[key]);
   b->refcnt--;
   release(&bcache.hashtbl.bucket_lock[key]);
