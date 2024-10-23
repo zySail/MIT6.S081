@@ -283,6 +283,7 @@ create(char *path, short type, short major, short minor)
   return ip;
 }
 
+int recursive_parse_symlink(char *path, int depth, char *target);
 uint64
 sys_open(void)
 {
@@ -343,6 +344,26 @@ sys_open(void)
 
   if((omode & O_TRUNC) && ip->type == T_FILE){
     itrunc(ip);
+  }
+
+  // opened file is a symlink file and need to phase
+  if(ip->type == T_SYMLINK && !(omode & O_NOFOLLOW)){ 
+    char target[MAXPATH], next_path[MAXPATH];
+    if(readi(ip, 0, (uint64)next_path, 0, MAXPATH) != MAXPATH){
+      iunlock(ip);
+      end_op();
+      return -1;
+    }
+    if(recursive_parse_symlink(next_path, 1, target) < 0){
+      iunlock(ip);
+      end_op();
+      return -1;
+    }
+    else{
+      iunlock(ip);
+      ip = namei(target);
+      ilock(ip);
+    }
   }
 
   iunlock(ip);
@@ -527,16 +548,19 @@ sys_symlink(void){
     // check target type, if target exsit
     ilock(ip);
     if(ip->type == T_DIR){ 
-      iunlockput(ip);
+      iunlock(ip);
       end_op();
       return -1;
     }
     if(ip->type == T_SYMLINK){
       char next_path[MAXPATH];
-      if(readi(ip, 0, (uint64)next_path, 0, MAXPATH) != MAXPATH)
+      if(readi(ip, 0, (uint64)next_path, 0, MAXPATH) != MAXPATH){
+        iunlock(ip);
+        end_op();
         return -1;
+      }
       if(recursive_parse_symlink(next_path, 1, target) < 0){
-        iunlockput(ip);
+        iunlock(ip);
         end_op();
         return -1;
       }
