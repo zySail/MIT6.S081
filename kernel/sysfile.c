@@ -487,5 +487,52 @@ sys_pipe(void)
 
 uint64
 sys_symlink(void){
+  char name[DIRSIZ], target[MAXPATH], path[MAXPATH];
+  struct inode *ip, *dp, *np;
+
+  if(argstr(0, target, MAXPATH) < 0 || argstr(1, path, MAXPATH) < 0)
+    return -1;
+
+  // get target inode
+  begin_op();
+  if((ip = namei(target)) != 0){ 
+    // check target type, if target exsit
+    ilock(ip);
+    if(ip->type == T_DIR){ 
+      iunlockput(ip);
+      end_op();
+      return -1;
+    }
+    if(ip->type == T_SYMLINK){
+
+    }
+    iunlock(ip);
+  }
+  
+  // get path parent inode and path last file name
+  if((dp = nameiparent(path, name)) == 0){ 
+    end_op();
+    return -1;
+  }
+
+  // create file(name) in path, create will check if name is exsit, if exsit create will return 0
+  // create return a locked inode
+  if((np = create(path, T_SYMLINK, 0, 0)) == 0){
+    end_op();
+    return -1;
+  }
+
+  // write target into inode(np)
+  uint len = strlen(target);
+  if(writei(np, 0, (uint64)target, 0, len) != len){
+    iunlockput(np);
+    end_op();
+    return -1;
+  }
+
+  iunlockput(np);
+
+  end_op();
+
   return 0;
 }
