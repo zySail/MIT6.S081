@@ -283,33 +283,59 @@ create(char *path, short type, short major, short minor)
   return ip;
 }
 
-int recursive_parse_symlink(char *path, int depth, char *target){
-  struct inode *ip;
-  char new_path[MAXPATH];
+// recursively follow symbolic link, using while loop
+static struct inode* parse_symlink(struct inode* ip){
+  uint depth = 0;
+  struct inode *next;
+  char path[MAXPATH];
 
-  if(depth >= 10)
-    return -1;
-
-  if((ip = namei(path)) == 0)
-    return -1;
-
-  ilock(ip);
-  if (ip->type == T_SYMLINK){
-    readi(ip, 0, (uint64)new_path, 0, MAXPATH); // read inode data, get new path
-    iunlock(ip);
-    if(recursive_parse_symlink(new_path, depth+1, target) < 0)
-      return -1;
-    else
+  while(ip->type == T_SYMLINK){
+    if(depth >= 10)
       return 0;
-  }
-  else{ // non-link file
-    memmove(path, target, MAXPATH);
-    iunlock(ip);
-    return 0;
+
+    readi(ip, 0, (uint64)path, 0, MAXPATH); // read inode data, get new path
+
+    if((next = namei(path)) == 0){
+      iunlockput(ip);
+      return 0;
+    }
+    iunlockput(ip);
+    ip = next;
+    ilock(ip);
+
+    depth++;
   }
 
-  return 0;
+  return ip; // return locked inode
 }
+
+// static struct inode* parse_symlink(struct inode* sym_ip, int depth){
+//   struct inode *dp, *tp;
+//   char path[MAXPATH];
+
+//   if(sym_ip->type != T_SYMLINK)
+//     return 0;
+
+//   if(depth >= 10)
+//     return 0;
+
+//   readi(sym_ip, 0, (uint64)path, 0, MAXPATH); // read inode data, get new path
+
+//   if((dp = namei(path)) == 0)
+//     return 0;
+//   ilock(dp);
+//   if(dp->type == T_SYMLINK){
+//     if((tp = parse_symlink(dp, depth+1)) == 0){
+//       iunlockput(dp);
+//       return 0;
+//     }
+//     iunlockput(dp);
+//     return tp;
+//   }
+//   else{ 
+//     return dp;
+//   }
+// }
 
 uint64
 sys_open(void)
@@ -344,29 +370,18 @@ sys_open(void)
     }
   }
 
+  // opened file is a symlink file and need to follow
+  if(ip->type == T_SYMLINK && !(omode & O_NOFOLLOW)){ 
+    if((ip = parse_symlink(ip)) == 0){
+      end_op();
+      return -1;
+    }
+  }
+
   if(ip->type == T_DEVICE && (ip->major < 0 || ip->major >= NDEV)){
     iunlockput(ip);
     end_op();
     return -1;
-  }
-
-  // opened file is a symlink file and need to phase
-  if(ip->type == T_SYMLINK && !(omode & O_NOFOLLOW)){ 
-    char target[MAXPATH], next_path[MAXPATH];
-    if(readi(ip, 0, (uint64)next_path, 0, MAXPATH) != MAXPATH){
-      iunlockput(ip);
-      end_op();
-      return -1;
-    }
-    if(recursive_parse_symlink(next_path, 1, target) < 0){
-      iunlockput(ip);
-      end_op();
-      return -1;
-    }
-
-    iunlockput(ip);
-    ip = namei(target);
-    ilock(ip);
   }
 
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
@@ -535,38 +550,28 @@ sys_pipe(void)
 
 uint64
 sys_symlink(void){
-  char name[DIRSIZ], target[MAXPATH], path[MAXPATH];
-  struct inode *ip, *dp;
+  char target[MAXPATH], path[MAXPATH];
+  struct inode *ip;
 
   if(argstr(0, target, MAXPATH) < 0 || argstr(1, path, MAXPATH) < 0)
     return -1;
 
   begin_op();
-  
-  // get parent ionde and path last file name
-  if((dp = nameiparent(path, name)) == 0){ 
-    end_op();
-    return -1;
-  }
-  ilock(dp); // lock dp
 
-  // create file(name) in path, create will check if name is exsit, if exsit, create will return 0
+  // create symlink file in path, if name exsits, create will return 0
   // create return a locked inode
   if((ip = create(path, T_SYMLINK, 0, 0)) == 0){
-    iunlockput(dp);
     end_op();
     return -1;
   }
 
-  // write target into inode(np)
+  // write target into inode data
   if(writei(ip, 0, (uint64)target, 0, MAXPATH) != MAXPATH){
-    iunlockput(dp);
     iunlockput(ip);
     end_op();
     return -1;
   }
 
-  iunlockput(dp);
   iunlockput(ip);
 
   end_op();
