@@ -283,7 +283,7 @@ create(char *path, short type, short major, short minor)
   return ip;
 }
 
-// recursively follow symbolic link, using while loop
+// parse symbolic link, using while loop
 static struct inode* parse_symlink(struct inode* ip){
   uint depth = 0;
   struct inode *next;
@@ -299,6 +299,7 @@ static struct inode* parse_symlink(struct inode* ip){
       iunlockput(ip);
       return 0;
     }
+
     iunlockput(ip);
     ip = next;
     ilock(ip);
@@ -309,36 +310,35 @@ static struct inode* parse_symlink(struct inode* ip){
   return ip; // return locked inode
 }
 
-// static struct inode* parse_symlink(struct inode* ip){
-//   return deep_parse(ip, 0);
-// }
 
-// static struct inode* deep_parse(struct inode* sym_ip, int depth){
-//   struct inode *dp, *tp;
+// // parse symbolic link, using recursively function(DFS)
+// static struct inode* deep_parse(struct inode* ip, int depth){
+//   struct inode *next;
 //   char path[MAXPATH];
 
-//   if(sym_ip->type != T_SYMLINK)
+//   if(ip->type != T_SYMLINK)
 //     return 0;
 
 //   if(depth >= 10)
 //     return 0;
 
-//   readi(sym_ip, 0, (uint64)path, 0, MAXPATH); // read inode data, get new path
-
-//   if((dp = namei(path)) == 0)
+//   readi(ip, 0, (uint64)path, 0, MAXPATH); // read inode data, get new path
+//   if((next = namei(path)) == 0){
+//     iunlockput(ip);
 //     return 0;
-//   ilock(dp);
-//   if(dp->type == T_SYMLINK){
-//     if((tp = parse_symlink(dp, depth+1)) == 0){
-//       iunlockput(dp);
-//       return 0;
-//     }
-//     iunlockput(dp);
-//     return tp;
+//   }
+//   ilock(next);
+//   if(next->type == T_SYMLINK){
+//     iunlockput(ip);
+//     return deep_parse(next, depth+1);
 //   }
 //   else{ 
-//     return dp;
+//     iunlockput(ip);
+//     return next;
 //   }
+// }
+// static struct inode* parse_symlink(struct inode* ip){
+//   return deep_parse(ip, 0);
 // }
 
 uint64
@@ -376,7 +376,7 @@ sys_open(void)
 
   // opened file is a symlink file and need to follow
   if(ip->type == T_SYMLINK && !(omode & O_NOFOLLOW)){ 
-    if((ip = parse_symlink(ip)) == 0){
+    if((ip = parse_symlink(ip)) == 0){ // I write two ways: while loop and DFS
       end_op();
       return -1;
     }
