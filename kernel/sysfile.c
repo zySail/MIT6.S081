@@ -309,7 +309,11 @@ static struct inode* parse_symlink(struct inode* ip){
   return ip; // return locked inode
 }
 
-// static struct inode* parse_symlink(struct inode* sym_ip, int depth){
+// static struct inode* parse_symlink(struct inode* ip){
+//   return deep_parse(ip, 0);
+// }
+
+// static struct inode* deep_parse(struct inode* sym_ip, int depth){
 //   struct inode *dp, *tp;
 //   char path[MAXPATH];
 
