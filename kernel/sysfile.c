@@ -537,58 +537,34 @@ int recursive_parse_symlink(char *path, int depth, char *target){
 uint64
 sys_symlink(void){
   char name[DIRSIZ], target[MAXPATH], path[MAXPATH];
-  struct inode *ip, *dp, *np;
+  struct inode *ip;
 
   if(argstr(0, target, MAXPATH) < 0 || argstr(1, path, MAXPATH) < 0)
     return -1;
 
-  // get target inode
   begin_op();
-  if((ip = namei(target)) != 0){ 
-    // check target type, if target exsit
-    ilock(ip);
-    if(ip->type == T_DIR){ 
-      iunlock(ip);
-      end_op();
-      return -1;
-    }
-    if(ip->type == T_SYMLINK){
-      char next_path[MAXPATH];
-      if(readi(ip, 0, (uint64)next_path, 0, MAXPATH) != MAXPATH){
-        iunlock(ip);
-        end_op();
-        return -1;
-      }
-      if(recursive_parse_symlink(next_path, 1, target) < 0){
-        iunlock(ip);
-        end_op();
-        return -1;
-      }
-    }
-    iunlock(ip);
-  }
   
-  // get path parent inode and path last file name
-  if((dp = nameiparent(path, name)) == 0){ 
+  // get path last file name
+  if((nameiparent(path, name)) == 0){ 
     end_op();
     return -1;
   }
 
   // create file(name) in path, create will check if name is exsit, if exsit, create will return 0
   // create return a locked inode
-  if((np = create(path, T_SYMLINK, 0, 0)) == 0){
+  if((ip = create(path, T_SYMLINK, 0, 0)) == 0){
     end_op();
     return -1;
   }
 
   // write target into inode(np)
-  if(writei(np, 0, (uint64)target, 0, MAXPATH) != MAXPATH){
-    iunlockput(np);
+  if(writei(ip, 0, (uint64)target, 0, MAXPATH) != MAXPATH){
+    iunlock(ip);
     end_op();
     return -1;
   }
 
-  iunlockput(np);
+  iunlock(ip);
 
   end_op();
 
