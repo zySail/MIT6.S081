@@ -67,4 +67,4 @@
 //   TRAMPOLINE (the same page as in the kernel)
 #define TRAPFRAME (TRAMPOLINE - PGSIZE)
 
-#define MAP_BASE (TRAPFRAME - PGSZIE)
+#define MAP_BASE (TRAPFRAME - PGSIZE)
