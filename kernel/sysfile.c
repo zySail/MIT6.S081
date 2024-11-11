@@ -485,10 +485,63 @@ sys_pipe(void)
   return 0;
 }
 
+int do_map(uint64 addr, uint64 length, int prot, int flags,int fd, uint64 offset);
 uint64 sys_mmap(void){
-  return -1;
+  uint64 addr;
+  uint64 length;
+  int prot;
+  int flags;
+  int fd;
+  uint64 offest;
+  
+  // get arguments
+  if(argaddr(0, &addr) < 0 || argaddr(1, &length) < 0 || argint(2, &prot) < 0 || argint(3, &flags) < 0 || argint(4, &fd) < 0 || argaddr(5, &offest) < 0)
+    return -1;
+
+  length = PGROUNDDOWN(length);
+
+  return do_map(addr, length, prot, flags, fd, offest);
 }
 
+int do_map(uint64 addr, uint64 length, int prot, int flags,int fd, uint64 offset){
+  struct VMA *vp;
+  struct proc *p = myproc();
+  struct file *fp = p->ofile[fd]; // get file pointer
+
+  // check read and write
+  if(prot & PROT_READ)
+    if(!fp->readable)
+      return -1;
+  if(prot & PROT_WRITE)
+    if(!fp->writable)
+      if(!(flags & MAP_PRIVATE))
+        return -1;
+  if((flags & MAP_SHARED) && (prot & PROT_WRITE))
+    if(!fp->writable)
+      return -1;
+  
+  // alloc an unused VMA
+  if((vp = allocVMA()) == 0)
+    return -1;
+
+  // update VMA
+  vp->start = addr;
+  vp->end = addr + length;
+  vp->prot = prot;
+  vp->flags = flags;
+  vp->fd = fd;
+  vp->fp = fp;
+
+  // update map size, map expand to lower address
+  p->map_end -= length;
+
+  // increment file ref count
+  filedup(fp); 
+
+  return vp->start;
+}
+
+int do_unmap(uint64 addr, uint64 length);
 uint64 sys_munmap(void){
   return -1;
 }
