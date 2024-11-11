@@ -6,7 +6,18 @@
 #include "proc.h"
 #include "defs.h"
 
-// #include "file.h"
+#include "fcntl.h"
+
+struct file {
+  enum { FD_NONE, FD_PIPE, FD_INODE, FD_DEVICE } type;
+  int ref; // reference count
+  char readable;
+  char writable;
+  struct pipe *pipe; // FD_PIPE
+  struct inode *ip;  // FD_INODE and FD_DEVICE
+  uint off;          // FD_INODE
+  short major;       // FD_DEVICE
+};
 
 struct spinlock tickslock;
 uint ticks;
@@ -31,58 +42,50 @@ trapinithart(void)
   w_stvec((uint64)kernelvec);
 }
 
-// int handle_page_fault(uint64 va){
-//   struct proc *p = myproc();
-//   struct VMA *vp;
-//   int i;
-//   uint64 pa;
-//   int perm;
-//   struct inode *ip;
-//   uint off;
-//   int prot;
+int handle_page_fault(uint64 va){
+  struct proc *p = myproc();
+  struct VMA *vp;
+  uint64 pa;
+  int perm = 0;
 
-//   if((va % PGSIZE) != 0)
-//     panic("uvmunmap: not aligned");
+  if((va % PGSIZE) != 0)
+    panic("uvmunmap: not aligned");
 
-//   if((vp = getVMA(va)) < 0)
-//     return -1;
-  
-//   ip = vp->fp->ip;
-//   off = vp->offest;
-//   prot = vp->prot;
+  if((vp = getVMA(va)) < 0)
+    return -1;
 
-//   // alloc a new physical page
-//   if((pa = (uint64)kalloc()) == 0){
-//     printf("no mem for a new page\n");
-//     return -1;
-//   }
-//   memset((char*)pa, 0, PGSIZE);
+  // alloc a new physical page
+  if((pa = (uint64)kalloc()) == 0){
+    printf("no mem for a new page\n");
+    return -1;
+  }
+  memset((char*)pa, 0, PGSIZE);
 
-//   // read one page from file into pa
-//   begin_op();
-//   ilock(ip);
-//   if(readi(ip, 0, pa, off, PGSIZE) < 0){
-//     iunlock(ip);
-//     kfree((void*)pa);
-//     return -1;
-//   }
-//   iunlock(ip);
-//   end_op();
-//   p->VMAs[i].off += PGSIZE; // update VMA off
+  // read one page from file into pa
+  begin_op();
+  ilock(vp->fp->ip);
+  if(readi(vp->fp->ip, 0, pa, vp->offest, PGSIZE) < 0){
+    iunlock(vp->fp->ip);
+    kfree((void*)pa);
+    return -1;
+  }
+  iunlock(vp->fp->ip);
+  end_op();
 
-//   // map page
-//   perm = 0;
-//   if(prot & PROT_READ)
-//     perm |= PTE_R;
-//   if(prot & PROT_WRITE)
-//     perm |= PTE_W;
-//   if(prot & PROT_EXEC)
-//     perm |= PTE_X;
+  vp->offest += PGSIZE; // update VMA off
+
+  // map page
+  if(vp->prot & PROT_READ)
+    perm |= PTE_R;
+  if(vp->prot & PROT_WRITE)
+    perm |= PTE_W;
+  if(vp->prot & PROT_EXEC)
+    perm |= PTE_X;
     
-//   mappages(p->pagetable, va, PGSIZE, pa, perm | PTE_U);
+  mappages(p->pagetable, va, PGSIZE, pa, perm | PTE_U);
   
-//   return 0;
-// }
+  return 0;
+}
 
 //
 // handle an interrupt, exception, or system call from user space.
@@ -121,14 +124,14 @@ usertrap(void)
 
     syscall();
   }
-  // else if(r_scause() == 0xd){
-  //   if(p->killed)
-  //     exit(-1);
+  else if(r_scause() == 0xd){
+    if(p->killed)
+      exit(-1);
 
-  //   uint64 fault_va = r_stval();
-  //   if(handle_page_fault(PGROUNDDOWN(fault_va)) < 0)
-  //     p->killed = 1;
-  // } 
+    uint64 fault_va = r_stval();
+    if(handle_page_fault(PGROUNDDOWN(fault_va)) < 0)
+      p->killed = 1;
+  } 
   else if((which_dev = devintr()) != 0){
     // ok
   } else {
