@@ -139,7 +139,7 @@ found:
   for(int i = 0; i < MAXVMAs; i++){
     memset(&p->VMAs[i], 0, sizeof(struct VMA));
   }
-  p->mapsz = MAP_BASE;
+  p->map_end = MAP_BASE;
 
   // Set up new context to start executing at forkret,
   // which returns to user space.
@@ -665,8 +665,11 @@ procdump(void)
 struct VMA* allocVMA(void){
   struct proc *p = myproc();
   for(int i =0; i < MAXVMAs; i++){
-    if(p->VMAs[i].valid == 0)
+    if(p->VMAs[i].valid == 0){
+      p->VMAs[i].valid = 1;
       return &p->VMAs[i];
+    }
+      
   }
   return 0;
 }
