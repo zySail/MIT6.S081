@@ -62,6 +62,9 @@
 //   fixed-size stack
 //   expandable heap
 //   ...
+//   expandable map region
 //   TRAPFRAME (p->trapframe, used by the trampoline)
 //   TRAMPOLINE (the same page as in the kernel)
 #define TRAPFRAME (TRAMPOLINE - PGSIZE)
+
+#define MAP_BASE (TRAPFRAME - PGSZIE)
