@@ -503,7 +503,7 @@ uint64 sys_mmap(void){
   return do_map(addr, length, prot, flags, fd, offest);
 }
 
-int do_map(uint64 addr, uint64 length, int prot, int flags,int fd, uint64 offset){
+int do_map(uint64 addr, uint64 length, int prot, int flags,int fd, uint64 offest){
   struct VMA *vp;
   struct proc *p = myproc();
   struct file *fp = p->ofile[fd]; // get file pointer
@@ -530,6 +530,7 @@ int do_map(uint64 addr, uint64 length, int prot, int flags,int fd, uint64 offset
   vp->prot = prot;
   vp->flags = flags;
   vp->fd = fd;
+  vp->offest = offest;
   vp->fp = fp;
 
   // update map size, map expand to lower address

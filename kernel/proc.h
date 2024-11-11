@@ -89,7 +89,7 @@ struct VMA{
   int prot;
   int flags;
   int fd;
-  uint64 offset;
+  uint64 offest;
   struct file *fp;
 };
 
