@@ -659,3 +659,23 @@ procdump(void)
     printf("\n");
   }
 }
+
+// find an unused VMA and return
+struct VMA* allocVMA(void){
+  struct proc *p = myproc();
+  for(int i =0; i < MAXVMAs; i++){
+    if(p->VMAs[i].valid == 0)
+      return &p->VMAs[i];
+  }
+  return 0;
+}
+
+// get VMA according to va
+struct VMA* getVMA(uint64 va){
+  struct proc *p = myproc();
+  for(int i =0; i < MAXVMAs; i++){
+    if(p->VMAs[i].valid == 1 && va >= p->VMAs[i].start && va < p->VMAs[i].end)
+      return &p->VMAs[i];
+  }
+  return 0; // va not belong to any VMA
+}
