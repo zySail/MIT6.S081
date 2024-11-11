@@ -135,6 +135,11 @@ found:
     return 0;
   }
 
+  // init VMAs[]
+  for(int i = 0; i < MAXVMAs; i++){
+    memset(&p->VMAs[i], 0, sizeof(struct VMA));
+  }
+
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
