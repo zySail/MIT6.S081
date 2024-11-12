@@ -297,6 +297,12 @@ fork(void)
   }
   np->sz = p->sz;
 
+  // copy map vma
+  for(int i = 0; i < MAXVMAs; i++){
+    memmove(&p->VMAs[i], &np->VMAs[i], sizeof(struct VMA));
+  }
+  np->map_end = p->map_end;
+
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 
