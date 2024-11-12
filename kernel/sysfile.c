@@ -544,7 +544,7 @@ uint64 do_map(uint64 addr, uint64 length, int prot, int flags,int fd, uint64 off
 
   // increment file ref count
   filedup(fp); 
-  printf("map at %p - %p, length: %d\n", vp->start, vp->end, length);
+  //printf("map at %p - %p, length: %d\n", vp->start, vp->end, length);
   return vp->start;
 }
 
