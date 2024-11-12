@@ -213,6 +213,8 @@ proc_freepagetable(pagetable_t pagetable, uint64 sz)
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
   uvmfree(pagetable, sz);
+  struct proc *p = myproc();
+  uvmunmap(pagetable, p->map_end, PGROUNDUP(p->map_end - MAP_BASE)/PGSIZE, 1);
 }
 
 // a user program that calls exec("/init")
