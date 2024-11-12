@@ -186,6 +186,7 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
   }
 }
 
+// remove vma in pagetable
 void uvm_vma_unmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free){
   uint64 a;
   pte_t *pte;
@@ -198,7 +199,7 @@ void uvm_vma_unmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
       continue;
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvm_vma_unmap: not a leaf");
-    if((*pte & PTE_V) && do_free){ // do free only has mapped 
+    if(do_free){ // do free only has mapped 
       uint64 pa = PTE2PA(*pte);
       kfree((void*)pa);
     }
