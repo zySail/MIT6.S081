@@ -565,7 +565,7 @@ int do_unmap(uint64 addr, uint64 length){
   struct VMA *vp;
 
   if((vp = getVMA(addr)) == 0)
-    return -1;
+    return 0;
 
   // write back all pages if MAP_SHARED
   if(vp->flags & MAP_SHARED){
@@ -598,6 +598,25 @@ int do_unmap(uint64 addr, uint64 length){
     // if(i != length){
     //   return -1;
     // }
+  }
+
+  // uvm_vma_unmap
+  struct proc *p = myproc();
+  uvm_vma_unmap(p->pagetable, addr, PGROUNDUP(length)/PGSIZE, 1);
+
+  // update MVA
+  // case 1: munmap the whole region
+  if(addr == vp->start && length == vp->end - vp->start){
+    fileclose(vp->fp); // decrement ref count
+    memset(vp, 0, 1);
+  }
+  // case 2: munmap from start but not to end
+  else if(addr == vp->start && length < vp->end - vp->start){
+    vp->start += length;
+  }
+  // case 3: munmap to end but not from start
+  else if(addr > vp->start && length == vp->end - vp->start){
+    vp->end -= length;
   }
 
   return 0;
