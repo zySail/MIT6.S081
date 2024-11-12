@@ -550,5 +550,55 @@ uint64 do_map(uint64 addr, uint64 length, int prot, int flags,int fd, uint64 off
 
 int do_unmap(uint64 addr, uint64 length);
 uint64 sys_munmap(void){
+  uint64 addr;
+  uint64 length;
+  
+  if(argaddr(0, &addr) < 0 || argaddr(1, &length) < 0)
+    return -1;
+  if(length == 0)
+    return -1;
+
+  return do_unmap(addr, length);
+}
+
+int do_unmap(uint64 addr, uint64 length){
+  struct VMA *vp;
+
+  if((vp = getVMA(addr)) == 0)
+    return -1;
+
+  // write back all pages if MAP_SHARED
+  if(vp->flags & MAP_SHARED){
+    int r = 0;
+    int i = 0;
+    int max = ((MAXOPBLOCKS-1-1-2) / 2) * BSIZE;
+    uint64 file_offset =vp->offset + (addr - vp->start);
+
+    if(vp->fp->writable == 0)
+      return -1;
+
+    while(i < length){
+      int n1 = length - i;
+      if(n1 > max)
+        n1 = max;
+
+      begin_op();
+      ilock(vp->fp->ip);
+      if ((r = writei(vp->fp->ip, 1, addr + i, file_offset, n1)) > 0)
+        file_offset += r;
+      iunlock(vp->fp->ip);
+      end_op();
+
+      if(r != n1){
+        // error from writei
+        break;
+      }
+      i += r;
+    }
+    // if(i != length){
+    //   return -1;
+    // }
+  }
+
   return 0;
 }
