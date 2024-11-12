@@ -186,6 +186,26 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
   }
 }
 
+void uvm_vma_unmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free){
+  uint64 a;
+  pte_t *pte;
+
+  if((va % PGSIZE) != 0)
+    panic("uvm_vma_unmap: not aligned");
+
+  for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
+    if((pte = walk(pagetable, a, 0)) == 0)
+      continue;
+    if(PTE_FLAGS(*pte) == PTE_V)
+      panic("uvm_vma_unmap: not a leaf");
+    if((*pte & PTE_V) && do_free){ // do free only has mapped 
+      uint64 pa = PTE2PA(*pte);
+      kfree((void*)pa);
+    }
+    *pte = 0;
+  }
+}
+
 // create an empty user page table.
 // returns 0 if out of memory.
 pagetable_t
