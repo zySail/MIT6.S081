@@ -46,25 +46,29 @@ int handle_page_fault(uint64 va){
   struct proc *p = myproc();
   struct VMA *vp;
   uint64 pa;
-  int perm = 0;
+  int perm;
+  uint64 file_offset;
 
-  if((va % PGSIZE) != 0)
-    panic("uvmunmap: not aligned");
-
-  if((vp = getVMA(va)) < 0)
+  va = PGROUNDDOWN(va);
+  
+  // get VMA
+  if((vp = getVMA(va)) == 0)
     return -1;
 
   // alloc a new physical page
   if((pa = (uint64)kalloc()) == 0){
-    printf("no mem for a new page\n");
+    printf("handle_page_fault: no mem\n");
     return -1;
   }
   memset((char*)pa, 0, PGSIZE);
 
+  // caculate the offest of the file
+  file_offset = vp->offset + (va - vp->start);
+
   // read one page from file into pa
   begin_op();
   ilock(vp->fp->ip);
-  if(readi(vp->fp->ip, 0, pa, vp->offest, PGSIZE) < 0){
+  if(readi(vp->fp->ip, 0, pa, file_offset, PGSIZE) < 0){
     iunlock(vp->fp->ip);
     kfree((void*)pa);
     return -1;
@@ -72,9 +76,9 @@ int handle_page_fault(uint64 va){
   iunlock(vp->fp->ip);
   end_op();
 
-  vp->offest += PGSIZE; // update VMA off
-
   // map page
+  perm = 0;
+  perm |= PTE_U;
   if(vp->prot & PROT_READ)
     perm |= PTE_R;
   if(vp->prot & PROT_WRITE)
@@ -82,7 +86,10 @@ int handle_page_fault(uint64 va){
   if(vp->prot & PROT_EXEC)
     perm |= PTE_X;
     
-  mappages(p->pagetable, va, PGSIZE, pa, perm | PTE_U);
+  if(mappages(p->pagetable, va, PGSIZE, pa, perm) < 0){
+    kfree((void*)pa);
+    return -1;
+  }
   
   return 0;
 }
@@ -129,7 +136,7 @@ usertrap(void)
       exit(-1);
 
     uint64 fault_va = r_stval();
-    if(handle_page_fault(PGROUNDDOWN(fault_va)) < 0)
+    if(handle_page_fault(fault_va) < 0)
       p->killed = 1;
   } 
   else if((which_dev = devintr()) != 0){
