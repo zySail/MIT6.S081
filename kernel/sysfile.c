@@ -548,6 +548,7 @@ uint64 do_map(uint64 addr, uint64 length, int prot, int flags,int fd, uint64 off
   return vp->start;
 }
 
+
 int do_unmap(uint64 addr, uint64 length);
 uint64 sys_munmap(void){
   uint64 addr;
@@ -557,6 +558,8 @@ uint64 sys_munmap(void){
     return -1;
   if(length == 0)
     return -1;
+  addr = PGROUNDDOWN(addr);
+  length = PGROUNDUP(length);
 
   return do_unmap(addr, length);
 }
@@ -565,7 +568,7 @@ int do_unmap(uint64 addr, uint64 length){
   struct VMA *vp;
 
   if((vp = getVMA(addr)) == 0)
-    return 0;
+    return -1;
 
   // write back all pages if MAP_SHARED
   if(vp->flags & MAP_SHARED){
@@ -602,7 +605,7 @@ int do_unmap(uint64 addr, uint64 length){
 
   // uvm_vma_unmap
   struct proc *p = myproc();
-  uvm_vma_unmap(p->pagetable, addr, PGROUNDUP(length)/PGSIZE, 1);
+  uvm_vma_unmap(p->pagetable, addr, PGROUNDUP(length)/PGSIZE, 0);
 
   // update MVA
   // case 1: munmap the whole region
@@ -618,6 +621,8 @@ int do_unmap(uint64 addr, uint64 length){
   else if(addr > vp->start && length == vp->end - vp->start){
     vp->end -= length;
   }
+  else // punch a hole in the middle of a region or beyond a region
+    return -1;
 
   return 0;
 }

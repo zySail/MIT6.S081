@@ -213,8 +213,6 @@ proc_freepagetable(pagetable_t pagetable, uint64 sz)
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
   uvmfree(pagetable, sz);
-  // struct proc *p = myproc();
-  // uvmunmap(pagetable, p->map_end, PGROUNDUP(p->map_end - MAP_BASE)/PGSIZE, 1);
 }
 
 // a user program that calls exec("/init")
@@ -299,7 +297,10 @@ fork(void)
 
   // copy map vma
   for(int i = 0; i < MAXVMAs; i++){
-    memmove(&p->VMAs[i], &np->VMAs[i], sizeof(struct VMA));
+    if(p->VMAs[i].valid == 1){
+      memmove(&p->VMAs[i], &np->VMAs[i], sizeof(struct VMA));
+      filedup(np->VMAs[i].fp);
+    }
   }
   np->map_end = p->map_end;
 
@@ -370,7 +371,8 @@ exit(int status)
   // unmap 
   for(int i = 0; i < MAXVMAs; i++){
     if(p->VMAs[i].valid == 1){
-      uvm_vma_unmap(p->pagetable, p->VMAs[i].start, p->VMAs[i].end - p->VMAs[i].start, 1);
+      uint64 npages = PGROUNDUP(p->VMAs[i].end - p->VMAs[i].start) / PGSIZE;
+      uvm_vma_unmap(p->pagetable, p->VMAs[i].start, npages, 0);
       memset(&p->VMAs[i], 0, sizeof(struct VMA));
     }
   }
@@ -684,8 +686,7 @@ struct VMA* allocVMA(void){
     if(p->VMAs[i].valid == 0){
       p->VMAs[i].valid = 1;
       return &p->VMAs[i];
-    }
-      
+    }  
   }
   return 0;
 }
