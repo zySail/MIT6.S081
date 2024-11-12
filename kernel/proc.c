@@ -361,6 +361,14 @@ exit(int status)
     }
   }
 
+  // unmap 
+  for(int i = 0; i < MAXVMAs; i++){
+    if(p->VMAs[i].valid == 1){
+      uvm_vma_unmap(p->pagetable, p->VMAs[i].start, p->VMAs[i].end - p->VMAs[i].start, 1);
+      memset(&p->VMAs[i], 0, sizeof(struct VMA));
+    }
+  }
+
   begin_op();
   iput(p->cwd);
   end_op();
