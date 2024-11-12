@@ -298,7 +298,7 @@ fork(void)
   // copy map vma
   for(int i = 0; i < MAXVMAs; i++){
     if(p->VMAs[i].valid == 1){
-      memmove(&p->VMAs[i], &np->VMAs[i], sizeof(struct VMA));
+      memmove(&np->VMAs[i], &p->VMAs[i], sizeof(struct VMA));
       filedup(np->VMAs[i].fp);
     }
   }
