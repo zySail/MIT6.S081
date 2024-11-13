@@ -197,8 +197,14 @@ void uvm_vma_unmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
   for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
     if((pte = walk(pagetable, a, 0)) == 0)
       continue;
+
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvm_vma_unmap: not a leaf");
+
+    if(*pte & PTE_D)
+      if(write_vma_back(a) < 0)
+        panic("uvm_vma_unmap: fail write back");
+        
     if(do_free){ // do free only has mapped 
       uint64 pa = PTE2PA(*pte);
       kfree((void*)pa);
