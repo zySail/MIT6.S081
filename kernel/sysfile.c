@@ -570,39 +570,6 @@ int do_unmap(uint64 addr, uint64 length){
   if((vp = getVMA(addr)) == 0)
     return -1;
 
-  // write back all pages if MAP_SHARED
-  if(vp->flags & MAP_SHARED){
-    int r = 0;
-    int i = 0;
-    int max = ((MAXOPBLOCKS-1-1-2) / 2) * BSIZE;
-    uint64 file_offset =vp->offset + (addr - vp->start);
-
-    if(vp->fp->writable == 0)
-      return -1;
-
-    while(i < length){
-      int n1 = length - i;
-      if(n1 > max)
-        n1 = max;
-
-      begin_op();
-      ilock(vp->fp->ip);
-      if ((r = writei(vp->fp->ip, 1, addr + i, file_offset, n1)) > 0)
-        file_offset += r;
-      iunlock(vp->fp->ip);
-      end_op();
-
-      if(r != n1){
-        // error from writei
-        break;
-      }
-      i += r;
-    }
-    // if(i != length){
-    //   return -1;
-    // }
-  }
-
   // uvm_vma_unmap
   struct proc *p = myproc();
   uvm_vma_unmap(p->pagetable, addr, PGROUNDUP(length)/PGSIZE, 0);
