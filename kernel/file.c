@@ -180,3 +180,16 @@ filewrite(struct file *f, uint64 addr, int n)
   return ret;
 }
 
+int write_vma_back(uint64 va){
+  struct VMA *vp = getVMA(va);
+  uint64 file_offset = vp->offset + (va - vp->start);
+  begin_op();
+    ilock(vp->fp->ip);
+    if(writei(vp->fp->ip, 1, va, file_offset, PGSIZE) != PGSIZE){
+      iunlock(vp->fp->ip);
+      return -1;
+    }
+    iunlock(vp->fp->ip);
+  end_op();
+  return 0;
+}
