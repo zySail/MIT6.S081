@@ -13,6 +13,8 @@
 #include "stat.h"
 #include "proc.h"
 
+#include "fcntl.h"
+
 struct devsw devsw[NDEV];
 struct {
   struct spinlock lock;
@@ -182,6 +184,10 @@ filewrite(struct file *f, uint64 addr, int n)
 
 int write_vma_back(uint64 va){
   struct VMA *vp = getVMA(va);
+  if(vp->flags & MAP_PRIVATE)
+    return 0;
+  if(vp == 0) 
+    return -1;
   uint64 file_offset = vp->offset + (va - vp->start);
   begin_op();
     ilock(vp->fp->ip);
